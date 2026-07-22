@@ -282,6 +282,9 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
   border-radius:12px;padding:6px 11px;font-size:.76rem;font-weight:800;}
 .badge.earned{border-color:rgba(245,158,11,.3);color:#fbbf24;}
 .badge.locked{opacity:.3;filter:grayscale(1);}
+.xp-title-badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(6,182,212,.1));
+  border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:6px 12px;font-size:.82rem;
+  font-weight:800;color:#c084fc;margin-bottom:10px;}
 .xp-bar-wrap{margin-top:6px;}
 .xp-bar-row{display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted);
   font-weight:700;margin-bottom:4px;}
@@ -385,7 +388,7 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
     <div class="hdr-chips">
       <div class="chip chip-s">🔥 <span id="streakNum">0</span> gün</div>
       <div class="chip chip-x">⚡ <span id="xpNum">0</span> XP</div>
-      <div class="chip chip-l">Lv.<span id="levelNum">1</span></div>
+      <div class="chip chip-l" id="levelChip">Lv.<span id="levelNum">1</span> <span id="levelTitleIcon"></span></div>
       <button class="goal-btn" onclick="openGoal()">🎯 Hedef</button>
       <button class="snap-btn" onclick="openSnapCard()">📸 Story</button>
       <button class="alarm-btn" id="alarmBtn" onclick="openAlarm()">⏰ Alarm</button>
@@ -734,6 +737,7 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
     </div>
     <div class="card">
       <div class="card-title">⚡ XP & Seviye</div>
+      <div class="xp-title-badge" id="xpTitleBadge"></div>
       <div class="xp-bar-wrap">
         <div class="xp-bar-row">
           <span>Lv.<span id="st-level">1</span></span>
@@ -874,6 +878,11 @@ function load(){
       else S=defaultState();
     } else S=JSON.parse(raw);
   }catch{S=defaultState();}
+  normalizeState();
+  // new day
+  rolloverDayIfNeeded();
+}
+function normalizeState(){
   // ensure new fields exist
   if(S.quests===undefined)S.quests=[];
   if(S.questsDate===undefined)S.questsDate="";
@@ -897,28 +906,56 @@ function load(){
     if(!S.subjects[n])S.subjects[n]={topics:{}};
     d.topics.forEach(t=>{if(S.subjects[n].topics[t]===undefined)S.subjects[n].topics[t]=false;});
   }
-  // new day
-  const today=todayStr();
-  if(S.todayDate!==today){
-    const days=daysBetween(S.todayDate,today);
-    for(let i=0;i<days;i++)S.weeklyMins.push(0);
-    S.weeklyMins=S.weeklyMins.slice(-7);
-    // lastStudyDate is only ever updated on a study action (see checkStreak());
-    // if more than 1 day passed since then, at least one full day had zero activity.
-    if(S.lastStudyDate&&daysBetween(S.lastStudyDate,today)>1)S.streak=0;
-    S.todayDate=today;
-    S.todayBlocks=[];S.todayPomodoros=0;S.todayMins=0;S.todayTopicsDone=0;
-    S.todayHataAdded=0;S.todayHataLearned=0;
-    applyTemplateToToday(false);
-  }
 }
-function todayStr(){return new Date().toISOString().slice(0,10);}
+function rolloverDayIfNeeded(){
+  const today=todayStr();
+  if(S.todayDate===today)return false;
+  const days=daysBetween(S.todayDate,today);
+  for(let i=0;i<days;i++)S.weeklyMins.push(0);
+  S.weeklyMins=S.weeklyMins.slice(-7);
+  // lastStudyDate is only ever updated on a study action (see checkStreak());
+  // if more than 1 day passed since then, at least one full day had zero activity.
+  if(S.lastStudyDate&&daysBetween(S.lastStudyDate,today)>1)S.streak=0;
+  S.todayDate=today;
+  S.todayBlocks=[];S.todayPomodoros=0;S.todayMins=0;S.todayTopicsDone=0;
+  S.todayHataAdded=0;S.todayHataLearned=0;
+  applyTemplateToToday(false);
+  return true;
+}
+function startDayRolloverChecker(){
+  setInterval(()=>{
+    if(rolloverDayIfNeeded()){
+      save();
+      ensureQuests();
+      setQuote();
+      setDate();
+      renderAll();
+      renderTimer();
+      showToast("🌅 Yeni bir gün başladı! Plan sıfırlandı.");
+    }
+  },60000);
+}
+function todayStr(){
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
 function daysBetween(a,b){
   const da=new Date(a),db=new Date(b);
   return Math.max(0,Math.round((db-da)/(1000*60*60*24)));
 }
 function calcLevel(xp){return Math.floor(xp/100)+1;}
 function xpForLevel(lvl){return(lvl-1)*100;}
+const LEVEL_TITLES=[
+  {min:1, max:5,        icon:"🐣", title:"Sınav Çaylağı"},
+  {min:6, max:10,       icon:"📚", title:"Ders Tutkunu"},
+  {min:11,max:15,       icon:"⚔️", title:"Soru Bükücü"},
+  {min:16,max:20,       icon:"🎯", title:"Net Avcısı"},
+  {min:21,max:25,       icon:"🚀", title:"Zirve Adayı"},
+  {min:26,max:Infinity, icon:"👑", title:"YKS Şampiyonu"},
+];
+function getLevelTitle(lvl){
+  return LEVEL_TITLES.find(t=>lvl>=t.min&&lvl<=t.max)||LEVEL_TITLES[LEVEL_TITLES.length-1];
+}
 function esc(str){
   return String(str==null?"":str).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -934,6 +971,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderAll();
   renderTimer();
   startAlarmChecker();
+  startDayRolloverChecker();
   requestNotifPerm();
 });
 function requestNotifPerm(){
@@ -972,7 +1010,11 @@ function renderAll(){
 function renderHeader(){
   document.getElementById("streakNum").textContent=S.streak;
   document.getElementById("xpNum").textContent=S.xp;
-  document.getElementById("levelNum").textContent=calcLevel(S.xp);
+  const lvl=calcLevel(S.xp);
+  document.getElementById("levelNum").textContent=lvl;
+  const lt=getLevelTitle(lvl);
+  document.getElementById("levelChip").title=lt.icon+" "+lt.title;
+  document.getElementById("levelTitleIcon").textContent=lt.icon+" "+lt.title;
   const btn=document.getElementById("alarmBtn");
   btn.className="alarm-btn"+(S.alarmEnabled?" act":"");
   btn.textContent=S.alarmEnabled?"⏰ "+S.alarmTime:"⏰ Alarm";
@@ -1862,6 +1904,8 @@ function renderStats(){
   const lvl=calcLevel(S.xp);
   const xpIn=S.xp-xpForLevel(lvl);
   document.getElementById("st-level").textContent=lvl;
+  const lt=getLevelTitle(lvl);
+  document.getElementById("xpTitleBadge").textContent=lt.icon+" "+lt.title;
   document.getElementById("st-xp").textContent=xpIn;
   document.getElementById("st-xpn").textContent=100;
   document.getElementById("xpFill").style.width=(xpIn)+"%";
@@ -1910,6 +1954,7 @@ document.getElementById("importFile").addEventListener("change",e=>{
       const data=JSON.parse(reader.result);
       if(!data||typeof data!=="object"||!data.subjects)throw new Error("invalid backup");
       S=Object.assign(defaultState(),data);
+      normalizeState();
       save();
       ensureQuests();
       renderAll();renderTimer();
@@ -1926,7 +1971,14 @@ document.getElementById("importFile").addEventListener("change",e=>{
 function gainXP(amt){
   const oldLvl=calcLevel(S.xp);
   S.xp+=amt;
-  if(calcLevel(S.xp)>oldLvl){showToast("🎊 SEVİYE ATLADIN! Seviye "+calcLevel(S.xp)+"!");playLevelSound();}
+  const newLvl=calcLevel(S.xp);
+  if(newLvl>oldLvl){
+    const oldTitle=getLevelTitle(oldLvl),newTitle=getLevelTitle(newLvl);
+    let msg="🎊 SEVİYE ATLADIN! Seviye "+newLvl+"!";
+    if(newTitle.title!==oldTitle.title)msg+="\nYeni ünvan: "+newTitle.icon+" "+newTitle.title+"!";
+    showToast(msg);
+    playLevelSound();
+  }
   renderHeader();
 }
 function checkStreak(){
@@ -2174,12 +2226,17 @@ function switchLofiCh(btn,id){
 }
 
 // ============ ALARM ============
+let lastAlarmFiredKey=null;
 function startAlarmChecker(){setInterval(checkAlarm,15000);}
 function checkAlarm(){
   if(!S.alarmEnabled)return;
   const now=new Date();
   const curr=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
-  if(curr===S.alarmTime)triggerAlarm();
+  if(curr!==S.alarmTime)return;
+  const key=todayStr()+"T"+curr;
+  if(lastAlarmFiredKey===key)return;
+  lastAlarmFiredKey=key;
+  triggerAlarm();
 }
 function triggerAlarm(){
   playAlarmSound();
@@ -2226,10 +2283,22 @@ function playLevelSound(){
 }
 
 // ============ TOAST ============
-let toastT=null;
+let toastQueue=[];
+let toastBusy=false;
 function showToast(msg){
-  const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");
-  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),3800);
+  toastQueue.push(msg);
+  processToastQueue();
+}
+function processToastQueue(){
+  if(toastBusy||!toastQueue.length)return;
+  toastBusy=true;
+  const msg=toastQueue.shift();
+  const t=document.getElementById("toast");
+  t.textContent=msg;t.classList.add("show");
+  setTimeout(()=>{
+    t.classList.remove("show");
+    setTimeout(()=>{toastBusy=false;processToastQueue();},350);
+  },2600);
 }
 
 // ============ TABS ============
