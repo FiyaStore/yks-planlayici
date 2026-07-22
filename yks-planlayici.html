@@ -285,6 +285,16 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 .xp-title-badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(6,182,212,.1));
   border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:6px 12px;font-size:.82rem;
   font-weight:800;color:#c084fc;margin-bottom:10px;}
+
+/* REWARDS SHOP */
+.reward-card{background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:9px;justify-content:space-between;}
+.reward-card.unlocked{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.08);}
+.reward-card.claimed{opacity:.5;}
+.reward-info{flex:1;min-width:0;}
+.reward-name{font-weight:800;font-size:.85rem;}
+.reward-meta{font-size:.7rem;color:var(--muted);font-weight:700;margin-top:2px;}
+.reward-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}
 .xp-bar-wrap{margin-top:6px;}
 .xp-bar-row{display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted);
   font-weight:700;margin-bottom:4px;}
@@ -747,6 +757,22 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
       </div>
     </div>
     <div class="card">
+      <div class="card-title">🎁 Ödül Mağazası</div>
+      <div style="font-size:.78rem;color:var(--muted);font-weight:700;margin-bottom:10px;">
+        Kendine küçük ödüller tanımla — belirlediğin XP'ye ulaşınca kilidi açılır! 🔓
+      </div>
+      <div id="rewardsList"></div>
+      <button class="btn btn-p btn-sm" onclick="toggleRewardForm()" style="width:100%;margin-top:8px;">+ Ödül Ekle</button>
+      <div class="add-form" id="addRewardForm" style="display:none;margin-top:10px;">
+        <input class="fi" id="rewardName" placeholder="Ödül (ör. 1 bölüm dizi izleme izni)" style="margin-bottom:7px;">
+        <input class="fi" id="rewardThreshold" type="number" placeholder="Kaç XP'de açılsın? (ör. 300)" style="margin-bottom:7px;">
+        <div class="add-form-btns">
+          <button class="btn btn-s btn-sm" onclick="toggleRewardForm()">İptal</button>
+          <button class="btn btn-g btn-sm" onclick="addReward()">✓ Ekle</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-title">💾 Veri Yönetimi</div>
       <div style="font-size:.78rem;color:var(--muted);font-weight:700;margin-bottom:10px;">
         İlerlemen sadece bu tarayıcıda saklanıyor. Tarayıcı verisi silinirse veya cihaz değiştirirsen kaybolur — düzenli yedek al!
@@ -865,6 +891,7 @@ function defaultState(){
     examDate:"",targetUni:"",targetDept:"",targetScore:null,targetNetTyt:null,targetNetAyt:null,
     weeklyTemplate:{0:[],1:[],2:[],3:[],4:[],5:[],6:[]},
     hatalar:[],todayHataAdded:0,todayHataLearned:0,
+    rewards:[],
   };
 }
 function save(){localStorage.setItem("yks2025v2",JSON.stringify(S));}
@@ -901,6 +928,7 @@ function normalizeState(){
   if(!S.hatalar)S.hatalar=[];
   if(S.todayHataAdded===undefined)S.todayHataAdded=0;
   if(S.todayHataLearned===undefined)S.todayHataLearned=0;
+  if(!S.rewards)S.rewards=[];
   if(!S.subjects)S.subjects={};
   for(const[n,d] of Object.entries(SUBJECTS_DATA)){
     if(!S.subjects[n])S.subjects[n]={topics:{}};
@@ -1897,6 +1925,7 @@ function flashAnswer(knewIt){
 
 // ============ STATS ============
 function renderStats(){
+  renderRewards();
   document.getElementById("st-streak").textContent=S.streak;
   document.getElementById("st-mins").textContent=S.todayMins;
   const tot=Object.values(S.subjects).reduce((a,s)=>a+Object.values(s.topics).filter(Boolean).length,0);
@@ -1980,6 +2009,89 @@ function gainXP(amt){
     playLevelSound();
   }
   renderHeader();
+  checkRewards();
+}
+function checkRewards(){
+  if(!S.rewards||!S.rewards.length)return;
+  let anyNew=false;
+  S.rewards.forEach(r=>{
+    if(!r.claimed&&!r.unlocked&&S.xp>=r.threshold){
+      r.unlocked=true;anyNew=true;
+      showToast("🔓 Ödül kilidi açıldı!\n"+r.name+" — hakkını kazandın! 🎉");
+      launchConfetti(true);
+    }
+  });
+  if(anyNew){save();renderRewards();}
+}
+function toggleRewardForm(){
+  const f=document.getElementById("addRewardForm");
+  f.style.display=f.style.display==="none"?"block":"none";
+}
+function addReward(){
+  const name=document.getElementById("rewardName").value.trim();
+  const threshold=parseInt(document.getElementById("rewardThreshold").value);
+  if(!name){showToast("❗ Ödül için bir isim yaz!");return;}
+  if(!threshold||threshold<=0){showToast("❗ Geçerli bir XP hedefi gir (0'dan büyük)!");return;}
+  S.rewards.push({id:Date.now(),name,threshold,unlocked:S.xp>=threshold,claimed:false,claimedAt:null});
+  save();
+  toggleRewardForm();
+  document.getElementById("rewardName").value="";
+  document.getElementById("rewardThreshold").value="";
+  renderRewards();
+  showToast("🎁 Ödül eklendi!");
+}
+function claimReward(id){
+  const r=S.rewards.find(x=>x.id===id);
+  if(!r||!r.unlocked||r.claimed)return;
+  r.claimed=true;r.claimedAt=todayStr();
+  save();renderRewards();
+  launchConfetti(true);
+  showToast("🎉 Tebrikler! Ödülünün tadını çıkar: "+r.name);
+}
+function deleteReward(id){
+  S.rewards=(S.rewards||[]).filter(x=>x.id!==id);
+  save();renderRewards();
+}
+function renderRewards(){
+  const el=document.getElementById("rewardsList");
+  if(!el)return;
+  const list=S.rewards||[];
+  if(!list.length){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:.82rem;font-weight:700;padding:12px 0;">Henüz ödül eklemedin. Kendine bir hedef koy! 👇</div>';
+    return;
+  }
+  el.innerHTML=list.map(r=>{
+    if(r.claimed){
+      return `<div class="reward-card claimed">
+        <div class="reward-info">
+          <div class="reward-name">${esc(r.name)}</div>
+          <div class="reward-meta">✅ Alındı · ${r.threshold} XP</div>
+        </div>
+        <button class="del-btn" onclick="deleteReward(${r.id})">🗑</button>
+      </div>`;
+    }
+    if(r.unlocked){
+      return `<div class="reward-card unlocked">
+        <div class="reward-info">
+          <div class="reward-name">${esc(r.name)}</div>
+          <div class="reward-meta">🔓 Kilidi açıldı! (${r.threshold} XP)</div>
+        </div>
+        <div class="reward-actions">
+          <button class="btn btn-g btn-sm" onclick="claimReward(${r.id})">🎁 Aldım</button>
+          <button class="del-btn" onclick="deleteReward(${r.id})">🗑</button>
+        </div>
+      </div>`;
+    }
+    const pct=Math.max(0,Math.min(100,Math.round(S.xp/r.threshold*100)));
+    return `<div class="reward-card">
+      <div class="reward-info">
+        <div class="reward-name">${esc(r.name)}</div>
+        <div class="reward-meta">${S.xp} / ${r.threshold} XP</div>
+        <div class="prog-bar" style="margin:5px 0 0;"><div class="prog-fill" style="width:${pct}%"></div></div>
+      </div>
+      <button class="del-btn" onclick="deleteReward(${r.id})">🗑</button>
+    </div>`;
+  }).join("");
 }
 function checkStreak(){
   const today=todayStr();
