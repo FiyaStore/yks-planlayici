@@ -247,14 +247,19 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);
 .t-name.done{text-decoration:line-through;color:var(--muted);}
 
 /* SANAL KÜTÜPHANE */
-.library-card{display:flex;align-items:center;gap:12px;
+.library-card{display:flex;flex-direction:column;gap:10px;
   background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(6,182,212,.08));
   border:1px solid rgba(124,58,237,.25);border-radius:18px;padding:13px 15px;margin-bottom:12px;
   animation:library-glow 3.5s ease-in-out infinite;}
+.library-top{display:flex;align-items:center;gap:12px;}
 .library-icon{font-size:1.6rem;flex-shrink:0;}
 .library-title{font-weight:900;font-size:.85rem;color:#c084fc;}
 .library-text{font-size:.76rem;color:var(--muted);font-weight:700;margin-top:2px;line-height:1.4;}
 @keyframes library-glow{0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,.15);}50%{box-shadow:0 0 18px 2px rgba(124,58,237,.15);}}
+.library-spotify-setup input{margin-bottom:6px;}
+.spotify-embed{border-radius:12px;display:block;}
+.library-change-btn{background:none;border:none;color:var(--muted);font-family:'Nunito',sans-serif;
+  font-weight:700;font-size:.68rem;cursor:pointer;margin-top:6px;text-decoration:underline;padding:0;}
 
 /* KRİZ MASASI */
 .crisis-trigger-btn{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
@@ -812,11 +817,14 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
       </div>
     </div>
     <div class="library-card" id="libraryCard" style="display:none;">
-      <div class="library-icon">📚</div>
-      <div>
-        <div class="library-title">Sanal Kütüphanedesin</div>
-        <div class="library-text" id="libraryText"></div>
+      <div class="library-top">
+        <div class="library-icon">📚</div>
+        <div>
+          <div class="library-title">Sanal Kütüphanedesin</div>
+          <div class="library-text" id="libraryText"></div>
+        </div>
       </div>
+      <div id="librarySpotifyArea"></div>
     </div>
     <div class="card" style="font-size:.8rem;color:var(--muted);font-weight:700;">
       💡 <strong style="color:var(--text)">Pomodoro tekniği:</strong> 25 dk çalış → 5 dk mola → 4 turdan sonra 15 dk uzun mola. Beyin böyle daha iyi öğrenir! 🧠
@@ -1099,6 +1107,7 @@ function defaultState(){
     activeTheme:"kozmik",
     dailyStudyLog:{},
     subjectStudyLog:{},
+    spotifyPlaylistId:"",
   };
 }
 function logStudyMinutes(delta){
@@ -1151,6 +1160,7 @@ function normalizeState(){
   if(!S.activeTheme||!THEMES[S.activeTheme])S.activeTheme="kozmik";
   if(!S.dailyStudyLog)S.dailyStudyLog={};
   if(!S.subjectStudyLog)S.subjectStudyLog={};
+  if(S.spotifyPlaylistId===undefined)S.spotifyPlaylistId="";
   if(!S.subjects)S.subjects={};
   for(const[n,d] of Object.entries(SUBJECTS_DATA)){
     if(!S.subjects[n])S.subjects[n]={topics:{}};
@@ -1521,9 +1531,48 @@ function renderLibraryCard(){
   const shouldShow=timerRunning&&timerMode==="work";
   if(shouldShow&&!libraryCardShown){
     document.getElementById("libraryText").textContent=LIBRARY_LINES[Math.floor(Math.random()*LIBRARY_LINES.length)];
+    renderLibrarySpotify();
   }
   card.style.display=shouldShow?"flex":"none";
   libraryCardShown=shouldShow;
+}
+function extractSpotifyPlaylistId(input){
+  if(!input)return null;
+  input=input.trim();
+  let m=input.match(/spotify:playlist:([a-zA-Z0-9]+)/);
+  if(m)return m[1];
+  m=input.match(/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/);
+  if(m)return m[1];
+  if(/^[a-zA-Z0-9]{15,30}$/.test(input))return input;
+  return null;
+}
+function saveSpotifyPlaylist(){
+  const raw=document.getElementById("spotifyInput").value;
+  const id=extractSpotifyPlaylistId(raw);
+  if(!id){showToast("❗ Geçerli bir Spotify çalma listesi linki yapıştır.");return;}
+  S.spotifyPlaylistId=id;
+  save();
+  renderLibrarySpotify();
+  showToast("🎵 Çalma listen kaydedildi!");
+}
+function clearSpotifyPlaylist(){
+  S.spotifyPlaylistId="";
+  save();
+  renderLibrarySpotify();
+}
+function renderLibrarySpotify(){
+  const el=document.getElementById("librarySpotifyArea");
+  if(!el)return;
+  if(S.spotifyPlaylistId){
+    el.innerHTML=`<iframe class="spotify-embed" src="https://open.spotify.com/embed/playlist/${esc(S.spotifyPlaylistId)}?utm_source=generator&theme=0"
+      width="100%" height="152" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+      <button class="library-change-btn" onclick="clearSpotifyPlaylist()">🔄 Listeyi değiştir</button>`;
+  }else{
+    el.innerHTML=`<div class="library-spotify-setup">
+      <input class="fi" id="spotifyInput" placeholder="Spotify çalma listesi linkini yapıştır...">
+      <button class="btn btn-g btn-sm" style="width:100%;" onclick="saveSpotifyPlaylist()">🎵 Kaydet & Çal</button>
+    </div>`;
+  }
 }
 function pad(n){return String(n).padStart(2,"0");}
 function renderCycles(){
