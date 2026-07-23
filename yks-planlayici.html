@@ -246,6 +246,16 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);
 .t-name{font-size:.82rem;font-weight:600;flex:1;}
 .t-name.done{text-decoration:line-through;color:var(--muted);}
 
+/* SANAL KÜTÜPHANE */
+.library-card{display:flex;align-items:center;gap:12px;
+  background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(6,182,212,.08));
+  border:1px solid rgba(124,58,237,.25);border-radius:18px;padding:13px 15px;margin-bottom:12px;
+  animation:library-glow 3.5s ease-in-out infinite;}
+.library-icon{font-size:1.6rem;flex-shrink:0;}
+.library-title{font-weight:900;font-size:.85rem;color:#c084fc;}
+.library-text{font-size:.76rem;color:var(--muted);font-weight:700;margin-top:2px;line-height:1.4;}
+@keyframes library-glow{0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,.15);}50%{box-shadow:0 0 18px 2px rgba(124,58,237,.15);}}
+
 /* KRİZ MASASI */
 .crisis-trigger-btn{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
   color:#fca5a5;font-family:'Nunito',sans-serif;font-weight:800;font-size:.86rem;
@@ -799,6 +809,13 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
           <div>Bugün: <span id="todayPom">0</span> 🍅</div>
           <div>Toplam: <span id="todayMins">0</span> dk</div>
         </div>
+      </div>
+    </div>
+    <div class="library-card" id="libraryCard" style="display:none;">
+      <div class="library-icon">📚</div>
+      <div>
+        <div class="library-title">Sanal Kütüphanedesin</div>
+        <div class="library-text" id="libraryText"></div>
       </div>
     </div>
     <div class="card" style="font-size:.8rem;color:var(--muted);font-weight:700;">
@@ -1485,6 +1502,26 @@ function renderTimer(){
   document.getElementById("todayPom").textContent=S.todayPomodoros;
   document.getElementById("todayMins").textContent=S.todayMins;
   renderCycles();
+  renderLibraryCard();
+}
+const LIBRARY_LINES=[
+  "Şu an Türkiye'nin dört bir yanında binlerce YKS adayı seninle aynı anda çalışıyor. 📖",
+  "Yalnız değilsin — her yıl milyonlarca öğrenci bu sınava hazırlanıyor. 🎯",
+  "Bu saatte kitap açan tek kişi sen değilsin. Sanal kütüphanene hoş geldin. 🕯️",
+  "Herkesin kendi sessiz köşesi var — burası senin çalışma alanın. 📚",
+  "Aynı hedefe koşan binlerce kişiden birisin, devam et. 🚀",
+  "Bu dakikada sessizce çalışan çok kişi var — sen de onlardan birisin. 🌙",
+];
+let libraryCardShown=false;
+function renderLibraryCard(){
+  const card=document.getElementById("libraryCard");
+  if(!card)return;
+  const shouldShow=timerRunning&&timerMode==="work";
+  if(shouldShow&&!libraryCardShown){
+    document.getElementById("libraryText").textContent=LIBRARY_LINES[Math.floor(Math.random()*LIBRARY_LINES.length)];
+  }
+  card.style.display=shouldShow?"flex":"none";
+  libraryCardShown=shouldShow;
 }
 function pad(n){return String(n).padStart(2,"0");}
 function renderCycles(){
