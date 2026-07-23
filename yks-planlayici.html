@@ -450,6 +450,30 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
   .chip{padding:3px 7px;font-size:.68rem;}
   .tab-btn{font-size:.68rem;padding:8px 2px;}
 }
+
+/* PRINT: WEEKLY TEMPLATE */
+.print-only{display:none;}
+@media print{
+  @page{size:A4 landscape;margin:10mm;}
+  body *{visibility:hidden;}
+  #printArea,#printArea *{visibility:visible;}
+  #printArea{position:absolute;top:0;left:0;width:100%;display:block !important;
+    background:#fff;color:#111;font-family:'Nunito',sans-serif;}
+  .p-header{text-align:center;margin-bottom:14px;}
+  .p-logo{font-size:1.4rem;font-weight:900;color:#7c3aed;}
+  .p-sub{font-size:.9rem;color:#555;font-weight:700;margin-top:2px;}
+  .p-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
+  .p-day{border:1px solid #ddd;border-radius:8px;padding:8px;min-height:160px;}
+  .p-day-title{font-weight:900;font-size:.85rem;margin-bottom:6px;text-align:center;
+    border-bottom:2px solid #7c3aed;padding-bottom:4px;color:#111;}
+  .p-block{border:1px solid #eee;border-radius:6px;padding:5px 6px;margin-bottom:5px;
+    background:#f8f8fb;break-inside:avoid;}
+  .p-block-top{font-size:.72rem;font-weight:800;color:#111;}
+  .p-block-topic{font-size:.66rem;color:#555;margin-top:1px;}
+  .p-block-dur{font-size:.62rem;color:#7c3aed;font-weight:800;margin-top:2px;}
+  .p-empty{font-size:.7rem;color:#bbb;text-align:center;padding:10px 0;}
+  .p-footer{text-align:center;margin-top:14px;font-size:.7rem;color:#888;}
+}
 </style>
 </head>
 <body>
@@ -556,10 +580,14 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
       <button class="btn btn-g btn-sm" style="width:100%;" onclick="addTemplateBlock()">✓ Şablona Ekle</button>
     </div>
     <div class="modal-actions" style="margin-top:12px;">
+      <button class="btn btn-s" style="flex:1" onclick="printWeeklyTemplate()">🖨️ Yazdır / PDF</button>
       <button class="btn btn-p" style="flex:1" onclick="closeTemplate()">Tamam</button>
     </div>
   </div>
 </div>
+
+<!-- PRINT AREA (only rendered onto the page when printing the weekly template) -->
+<div id="printArea" class="print-only"></div>
 
 <!-- GOAL MODAL -->
 <div class="overlay" id="goalOverlay">
@@ -1297,6 +1325,35 @@ function openTemplate(){
   document.getElementById("templateOverlay").classList.add("open");
 }
 function closeTemplate(){document.getElementById("templateOverlay").classList.remove("open");}
+function printWeeklyTemplate(){
+  const hasAny=Object.values(S.weeklyTemplate||{}).some(arr=>arr&&arr.length);
+  if(!hasAny){showToast("📭 Önce şablona en az bir blok eklemelisin.");return;}
+  const order=[1,2,3,4,5,6,0]; // Pzt..Paz baskı sırası (weeklyTemplate 0=Paz..6=Cmt ile eşleşir)
+  const dayLabels={0:"Pazar",1:"Pazartesi",2:"Salı",3:"Çarşamba",4:"Perşembe",5:"Cuma",6:"Cumartesi"};
+  const cols=order.map(idx=>{
+    const blocks=(S.weeklyTemplate[idx]||[]).slice().sort((a,b)=>(a.time||"99:99").localeCompare(b.time||"99:99"));
+    const items=blocks.length
+      ? blocks.map(b=>`<div class="p-block">
+          <div class="p-block-top">${SUBJECTS_DATA[b.subject]?.icon||"📖"} ${esc(b.subject)}${b.time?" · "+esc(b.time):""}</div>
+          ${b.topic?`<div class="p-block-topic">${esc(b.topic)}</div>`:""}
+          <div class="p-block-dur">${b.dur} dk</div>
+        </div>`).join("")
+      : '<div class="p-empty">—</div>';
+    return `<div class="p-day">
+      <div class="p-day-title">${dayLabels[idx]}</div>
+      ${items}
+    </div>`;
+  }).join("");
+  document.getElementById("printArea").innerHTML=`
+    <div class="p-header">
+      <div class="p-logo">🎯 YKS Planlayıcım</div>
+      <div class="p-sub">Haftalık Çalışma Programı${S.studentName?" · "+esc(S.studentName):""}</div>
+    </div>
+    <div class="p-grid">${cols}</div>
+    <div class="p-footer">Oluşturulma: ${formatTrDate(todayStr())}</div>
+  `;
+  window.print();
+}
 function buildTemplateSubjectSelect(){
   fillSubjectOptgroups(document.getElementById("tmplSubject"));
 }
