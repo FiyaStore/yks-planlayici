@@ -54,6 +54,8 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);
 .hdr-in{max-width:860px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .logo{font-size:1.05rem;font-weight:900;background:linear-gradient(135deg,#a855f7,#06b6d4);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap;}
+.user-greeting{font-size:.78rem;font-weight:700;color:var(--muted);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:140px;}
 .hdr-chips{display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap;}
 .chip{display:flex;align-items:center;gap:4px;border-radius:20px;padding:4px 10px;
   font-size:.72rem;font-weight:800;border:1px solid var(--border);background:var(--card);}
@@ -549,6 +551,7 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 <header class="hdr">
   <div class="hdr-in">
     <div class="logo">🎯 YKS Planlayıcım</div>
+    <div class="user-greeting" id="userGreeting"></div>
     <div class="hdr-chips">
       <div class="chip chip-s">🔥 <span id="streakNum">0</span> gün</div>
       <div class="chip chip-x">⚡ <span id="xpNum">0</span> XP</div>
@@ -733,6 +736,7 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 
     <div class="auth-panel" id="authPanelSignup">
       <input class="fi" id="signupInvite" placeholder="Davet Kodu" style="margin-bottom:8px;">
+      <input class="fi" id="signupNickname" placeholder="Adın / Takma Adın (uygulamada bu görünecek)" style="margin-bottom:8px;">
       <input class="fi" type="email" id="signupEmail" placeholder="E-posta" style="margin-bottom:8px;" autocomplete="username">
       <div class="pw-wrap">
         <input class="fi" type="password" id="signupPassword" placeholder="Şifre (en az 6 karakter)" autocomplete="new-password">
@@ -1355,6 +1359,7 @@ async function handleSignup(){
   if(!supabaseClient){authError("Uygulama henüz yapılandırılmadı (Supabase bağlantısı eksik).");return;}
   clearAuthError();
   const code=document.getElementById("signupInvite").value.trim();
+  const nickname=document.getElementById("signupNickname").value.trim();
   const email=document.getElementById("signupEmail").value.trim();
   const password=document.getElementById("signupPassword").value;
   const confirm=document.getElementById("signupPasswordConfirm").value;
@@ -1368,10 +1373,10 @@ async function handleSignup(){
     authError("Hesap oluşturuldu. E-postana bir onay linki gelmiş olabilir — onayladıktan sonra giriş yapıp davet kodunu tekrar gir.");
     return;
   }
-  await handleRedeemInvite(code);
+  await handleRedeemInvite(code,nickname);
 }
-async function handleRedeemInvite(code){
-  const{error}=await supabaseClient.rpc("redeem_invite_code",{p_code:code});
+async function handleRedeemInvite(code,nickname){
+  const{error}=await supabaseClient.rpc("redeem_invite_code",{p_code:code,p_full_name:nickname||null});
   if(error){
     authError("Davet kodu geçersiz, süresi dolmuş ya da zaten kullanılmış.");
     return;
@@ -1380,8 +1385,19 @@ async function handleRedeemInvite(code){
 }
 async function onAuthSuccess(){
   clearAuthError();
+  const{data:{user}}=await supabaseClient.auth.getUser();
+  if(user){
+    const{data:profile}=await supabaseClient.from("profiles").select("full_name").eq("id",user.id).maybeSingle();
+    setUserGreeting(profile?.full_name,user.email);
+  }
   document.getElementById("authOverlay").classList.remove("open");
   startApp();
+}
+function setUserGreeting(fullName,email){
+  const el=document.getElementById("userGreeting");
+  if(!el)return;
+  const name=(fullName&&fullName.trim())||(email?email.split("@")[0]:"")||"Öğrenci";
+  el.textContent="👋 "+name;
 }
 async function handleLogout(){
   if(supabaseClient)await supabaseClient.auth.signOut();
