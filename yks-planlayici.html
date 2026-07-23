@@ -1866,10 +1866,9 @@ function saveHata(){
       learned:false,learnedAt:null,masteryCount:0,lastReviewed:null,
     });
     S.todayHataAdded++;
-    gainXP(15);
     closeHataForm();
     save();renderHataDefteri();checkQuestProgress();checkBadges();
-    showToast("📸 Hata deftere eklendi! +15 XP");
+    showToast("📸 Hata deftere eklendi! Çözümünü öğrenince +25 XP kazanacaksın 🎯");
   });
 }
 function markHataLearned(id){
