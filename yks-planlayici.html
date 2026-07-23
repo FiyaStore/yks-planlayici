@@ -246,6 +246,20 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);
 .t-name{font-size:.82rem;font-weight:600;flex:1;}
 .t-name.done{text-decoration:line-through;color:var(--muted);}
 
+/* KRİZ MASASI */
+.crisis-trigger-btn{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
+  color:#fca5a5;font-family:'Nunito',sans-serif;font-weight:800;font-size:.86rem;
+  padding:9px 22px;border-radius:12px;cursor:pointer;transition:all .2s;}
+.crisis-trigger-btn:hover{background:rgba(239,68,68,.18);}
+.crisis-q{font-size:.92rem;font-weight:800;line-height:1.5;margin-bottom:16px;text-align:center;}
+.crisis-opts{display:flex;flex-direction:column;}
+.crisis-moral{font-size:.88rem;font-weight:700;line-height:1.5;color:var(--text);
+  background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.25);border-radius:14px;
+  padding:12px 14px;margin-bottom:14px;}
+.crisis-rx-title{font-size:.8rem;font-weight:900;color:var(--amber);margin-bottom:8px;}
+.crisis-rx-list{padding-left:20px;display:flex;flex-direction:column;gap:9px;}
+.crisis-rx-list li{font-size:.83rem;font-weight:600;line-height:1.5;}
+
 /* HATA DEFTERI */
 .hf-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;}
 .hf-pill{padding:4px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);
@@ -504,6 +518,14 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
     <div class="modal-title">🎁 Günün Şans Sandığı!</div>
     <div id="chestResult"></div>
     <button class="btn btn-p" style="width:100%;margin-top:14px;" onclick="closeChest()">Harika!</button>
+  </div>
+</div>
+
+<!-- KRİZ MASASI MODAL -->
+<div class="overlay" id="crisisOverlay">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-title">💔 Sorun Değil, Beraber Çözelim</div>
+    <div id="crisisBody"></div>
   </div>
 </div>
 
@@ -793,7 +815,8 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
     </div>
     <div class="card">
       <div class="card-title">📝 Denemelerim</div>
-      <button class="btn btn-p btn-sm" onclick="toggleDenemeForm()" style="width:100%;margin-bottom:2px;">+ Deneme Sonucu Ekle</button>
+      <button class="btn btn-p btn-sm" onclick="toggleDenemeForm()" style="width:100%;margin-bottom:7px;">+ Deneme Sonucu Ekle</button>
+      <button class="btn crisis-trigger-btn" onclick="openCrisis()" style="width:100%;margin-bottom:2px;">💔 Denemem Kötü Geçti</button>
       <div class="add-form" id="addDenemeForm" style="display:none;margin-top:10px;">
         <div class="form-row">
           <input class="fi" id="dnName" placeholder="Deneme adı (opsiyonel)" type="text">
@@ -1727,6 +1750,79 @@ function renderGoalSummary(){
   html+=progressRow("TYT Net Hedefi",tytLast?tytLast.totalNet:null,S.targetNetTyt);
   html+=progressRow("AYT Net Hedefi",aytLast?aytLast.totalNet:null,S.targetNetAyt);
   el.innerHTML=html;
+}
+
+// ============ KRİZ MASASI ============
+const CRISIS_PRESCRIPTIONS={
+  zaman:{icon:"⏱️",
+    moral:"Bilmiyor değildin, yetiştiremedin — bu farklı bir sorun ve çözümü var!",
+    steps:[
+      "Kolay soruları önce işaretleyip hızlıca geç, zor görünenleri en sona bırak.",
+      "Her soruya azami 1.5-2 dakika ayır; süre dolunca işaretle, devam et, geri dönme.",
+      "Bu hafta 3 kez sadece zamanlı mini testlerle (15 soru / 15 dk) hız pratiği yap.",
+    ]},
+  dikkat:{icon:"👁️",
+    moral:"Bilgi orada, sadece küçük bir dikkat sıçraması olmuş — bu en kolay düzelen sorun!",
+    steps:[
+      "Her soruyu çözdükten sonra 5 saniye durup soruyu tekrar oku, ne sorulduğunu doğrula.",
+      "İşlemlerini kâğıda büyük ve düzenli yaz, karışıklık dikkat hatasının en büyük sebebidir.",
+      "Bu denemeden en az 3 dikkatsizlik hatasını hata defterine ekle ve çözümünü not al.",
+    ]},
+  orijinal:{icon:"💡",
+    moral:"Konuyu biliyorsun, seni yakalayan sorunun kalıbıydı — bu tecrübeyle çözülür.",
+    steps:[
+      "Bu tarz soruları çözdüğün kaynağın \"farklı soru tipleri\" bölümüne dön, benzerlerini bul.",
+      "Bu denemedeki zor soruları hata defterine ekle, çözümünü adım adım anla ve not al.",
+      "Haftada 2 kez sadece zor / orijinal tarz sorulardan oluşan bir blok çöz.",
+    ]},
+  konu:{icon:"📚",
+    moral:"Bu net kaybı aslında sana yol gösteriyor — hangi konuya odaklanman gerektiğini biliyorsun artık!",
+    steps:[
+      "Bu haftaki plana, en çok kaybettiğin konudan en az 2 çalışma bloğu ekle.",
+      "Konuyu bitirmeden yeni deneme çözme — önce konuyu, sonra soruyu.",
+      "Konuyu bitirdiğinde \"Dersler\" sekmesinde işaretle, XP kazan ve ilerlemeni gör.",
+    ]},
+};
+let crisisStep=1;
+function openCrisis(){
+  crisisStep=1;
+  renderCrisisStep();
+  document.getElementById("crisisOverlay").classList.add("open");
+}
+function closeCrisis(){document.getElementById("crisisOverlay").classList.remove("open");}
+function renderCrisisStep(){
+  const body=document.getElementById("crisisBody");
+  if(crisisStep===1){
+    body.innerHTML=`<div class="crisis-q">⏱️ Süre mi yetişmedi? Zamanının çoğu birkaç soruya mı gitti?</div>
+      <div class="crisis-opts">
+        <button class="btn btn-g" style="width:100%;margin-bottom:8px;" onclick="finishCrisis('zaman')">Evet</button>
+        <button class="btn btn-s" style="width:100%;" onclick="crisisStep=2;renderCrisisStep();">Hayır</button>
+      </div>`;
+  }else if(crisisStep===2){
+    body.innerHTML=`<div class="crisis-q">👁️ Dikkat hatası mı çoktu? (Bildiğin halde işlem/okuma hatası)</div>
+      <div class="crisis-opts">
+        <button class="btn btn-g" style="width:100%;margin-bottom:8px;" onclick="finishCrisis('dikkat')">Evet</button>
+        <button class="btn btn-s" style="width:100%;" onclick="crisisStep=3;renderCrisisStep();">Hayır</button>
+      </div>`;
+  }else{
+    body.innerHTML=`<div class="crisis-q">🧠 Konuyu bildiğin halde mi yapamadın, yoksa o konuda eksiğin mi vardı?</div>
+      <div class="crisis-opts">
+        <button class="btn btn-s" style="width:100%;margin-bottom:8px;" onclick="finishCrisis('orijinal')">Bildiğim halde yapamadım</button>
+        <button class="btn btn-s" style="width:100%;" onclick="finishCrisis('konu')">O konuda eksiğim vardı</button>
+      </div>`;
+  }
+}
+function finishCrisis(key){
+  const p=CRISIS_PRESCRIPTIONS[key];
+  const body=document.getElementById("crisisBody");
+  body.innerHTML=`
+    <div class="crisis-moral">${p.icon} ${esc(p.moral)}</div>
+    <div class="crisis-rx-title">📋 Toparlanma Reçeten</div>
+    <ol class="crisis-rx-list">${p.steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>
+    <button class="btn btn-p" style="width:100%;margin-top:14px;" onclick="closeCrisis()">Anladım, devam ediyorum 💪</button>
+  `;
+  gainXP(10);
+  save();
 }
 
 // ============ DENEME ============
@@ -2738,7 +2834,7 @@ function switchTab(id,btn){
 }
 
 // Close modals on overlay click
-["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay","chestOverlay"].forEach(id=>{
+["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay","chestOverlay","crisisOverlay"].forEach(id=>{
   document.getElementById(id).addEventListener("click",function(e){
     if(e.target===this)this.classList.remove("open");
   });
