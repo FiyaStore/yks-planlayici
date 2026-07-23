@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="YKS Planlayıcım">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
 :root, [data-theme="kozmik"] {
   --bg:#09090f; --card:rgba(255,255,255,.04); --card-h:rgba(255,255,255,.07);
@@ -53,6 +54,11 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);
 .hdr-in{max-width:860px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .logo{font-size:1.05rem;font-weight:900;background:linear-gradient(135deg,#a855f7,#06b6d4);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap;}
+.user-greeting{font-size:.78rem;font-weight:700;color:var(--muted);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:140px;}
+.nickname-edit-btn{background:none;border:none;color:var(--muted);cursor:pointer;
+  font-size:.78rem;padding:2px 4px;line-height:1;flex-shrink:0;}
+.nickname-edit-btn:hover{color:var(--text);}
 .hdr-chips{display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap;}
 .chip{display:flex;align-items:center;gap:4px;border-radius:20px;padding:4px 10px;
   font-size:.72rem;font-weight:800;border:1px solid var(--border);background:var(--card);}
@@ -425,6 +431,32 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
   background:white;border-radius:9px;transition:transform .3s;}
 .toggle.on::after{transform:translateX(19px);}
 
+/* AUTH */
+.auth-tabs{display:flex;gap:5px;background:rgba(0,0,0,.3);border:1px solid var(--border);
+  border-radius:12px;padding:4px;margin-bottom:16px;}
+.auth-tab-btn{flex:1;padding:8px 4px;border:none;background:transparent;color:var(--muted);
+  border-radius:9px;cursor:pointer;font-family:'Nunito',sans-serif;font-weight:800;
+  font-size:.82rem;transition:all .2s;}
+.auth-tab-btn.on{background:var(--purple);color:white;}
+.auth-panel{display:none;}
+.auth-panel.on{display:block;}
+.auth-error{font-size:.78rem;font-weight:700;color:#fca5a5;background:rgba(239,68,68,.1);
+  border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:8px 11px;margin-bottom:10px;
+  display:none;}
+.auth-error.show{display:block;}
+.auth-loading{text-align:center;color:var(--muted);font-weight:700;font-size:.85rem;padding:20px 0;}
+.auth-link-btn{background:none;border:none;color:var(--muted);font-family:'Nunito',sans-serif;
+  font-weight:700;font-size:.72rem;cursor:pointer;text-decoration:underline;padding:0;
+  margin-top:2px;}
+.logout-btn{border-radius:20px;padding:4px 11px;font-size:.72rem;font-weight:800;cursor:pointer;
+  transition:background .2s;border:1px solid var(--border);background:var(--card);color:var(--muted);}
+.logout-btn:hover{background:var(--card-h);color:var(--text);}
+.pw-wrap{position:relative;margin-bottom:8px;}
+.pw-wrap .fi{margin-bottom:0;padding-right:38px;}
+.pw-toggle{position:absolute;top:50%;right:2px;transform:translateY(-50%);background:none;
+  border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:6px 9px;line-height:1;}
+.pw-toggle:hover{color:var(--text);}
+
 /* SNAP CARD MODAL */
 .snap-modal{max-width:420px;}
 .snap-name-inp{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:10px;
@@ -522,6 +554,8 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 <header class="hdr">
   <div class="hdr-in">
     <div class="logo">🎯 YKS Planlayıcım</div>
+    <div class="user-greeting" id="userGreeting"></div>
+    <button class="nickname-edit-btn" onclick="openNicknameEdit()" title="Takma adını değiştir">✏️</button>
     <div class="hdr-chips">
       <div class="chip chip-s">🔥 <span id="streakNum">0</span> gün</div>
       <div class="chip chip-x">⚡ <span id="xpNum">0</span> XP</div>
@@ -529,6 +563,7 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
       <button class="goal-btn" onclick="openGoal()">🎯 Hedef</button>
       <button class="snap-btn" onclick="openSnapCard()">📸 Hikaye</button>
       <button class="alarm-btn" id="alarmBtn" onclick="openAlarm()">⏰ Alarm</button>
+      <button class="logout-btn" onclick="handleLogout()">🚪 Çıkış</button>
     </div>
   </div>
 </header>
@@ -677,6 +712,61 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
     <div class="modal-actions">
       <button class="btn btn-p" style="flex:1" onclick="saveAlarm()">Kaydet</button>
       <button class="btn btn-s" onclick="closeAlarm()">İptal</button>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH MODAL (girişte kilitli, session doğrulanmadan kaldırılmaz) -->
+<div class="overlay open" id="authOverlay">
+  <div class="modal">
+    <div class="modal-title">🎯 YKS Planlayıcım</div>
+    <div class="auth-loading" id="authLoading">Yükleniyor...</div>
+    <div id="authFormWrap" style="display:none;">
+    <div class="auth-tabs" id="authTabs">
+      <button class="auth-tab-btn on" onclick="showAuthTab('login')">Giriş Yap</button>
+      <button class="auth-tab-btn" onclick="showAuthTab('signup')">Kayıt Ol</button>
+    </div>
+    <div class="auth-error" id="authError"></div>
+
+    <div class="auth-panel on" id="authPanelLogin">
+      <input class="fi" type="email" id="loginEmail" placeholder="E-posta" style="margin-bottom:8px;" autocomplete="username">
+      <div class="pw-wrap">
+        <input class="fi" type="password" id="loginPassword" placeholder="Şifre" autocomplete="current-password">
+        <button type="button" class="pw-toggle" onclick="togglePwVisibility('loginPassword',this)">👁️</button>
+      </div>
+      <button class="btn btn-p" style="width:100%;" onclick="handleLogin()">Giriş Yap</button>
+      <button class="auth-link-btn" onclick="handleForgotPassword()">Şifremi unuttum</button>
+    </div>
+
+    <div class="auth-panel" id="authPanelSignup">
+      <input class="fi" id="signupInvite" placeholder="Davet Kodu" style="margin-bottom:8px;">
+      <input class="fi" id="signupNickname" placeholder="Adın / Takma Adın (uygulamada bu görünecek)" style="margin-bottom:8px;">
+      <input class="fi" type="email" id="signupEmail" placeholder="E-posta" style="margin-bottom:8px;" autocomplete="username">
+      <div class="pw-wrap">
+        <input class="fi" type="password" id="signupPassword" placeholder="Şifre (en az 6 karakter)" autocomplete="new-password">
+        <button type="button" class="pw-toggle" onclick="togglePwVisibility('signupPassword',this)">👁️</button>
+      </div>
+      <div class="pw-wrap">
+        <input class="fi" type="password" id="signupPasswordConfirm" placeholder="Şifre (tekrar)" autocomplete="new-password">
+        <button type="button" class="pw-toggle" onclick="togglePwVisibility('signupPasswordConfirm',this)">👁️</button>
+      </div>
+      <button class="btn btn-p" style="width:100%;" onclick="handleSignup()">Kayıt Ol</button>
+    </div>
+
+    <div class="alarm-note" style="margin-top:14px;margin-bottom:0;text-align:center;">Bir davet kodun yoksa koçundan iste.</div>
+    </div>
+  </div>
+</div>
+
+<!-- NICKNAME EDIT MODAL -->
+<div class="overlay" id="nicknameOverlay">
+  <div class="modal">
+    <div class="modal-title">✏️ Takma Adını Değiştir</div>
+    <input class="fi" id="nicknameInput" placeholder="Adın / Takma Adın" style="margin-bottom:10px;">
+    <div class="auth-error" id="nicknameError"></div>
+    <div class="modal-actions">
+      <button class="btn btn-p" style="flex:1" onclick="saveNickname()">Kaydet</button>
+      <button class="btn btn-s" onclick="closeNicknameEdit()">İptal</button>
     </div>
   </div>
 </div>
@@ -978,6 +1068,17 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 </main>
 
 <script>
+// ============ SUPABASE (ÖĞRENCİ ERİŞİM KONTROLÜ) ============
+// TODO: Supabase projesi oluşturulduktan sonra bu iki değeri doldur.
+// Bunlar "anon" (public) anahtarlardır, tarayıcıya gömülmesi güvenlidir —
+// gerçek güvenlik sınırı veritabanındaki RLS politikalarıdır. service_role
+// anahtarını ASLA buraya veya başka bir client dosyasına koyma.
+const SUPABASE_URL="https://imbqlongxuxpyhgfidgl.supabase.co";
+const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltYnFsb25neHV4cHloZ2ZpZGdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTgxMTAsImV4cCI6MjEwMDM5NDExMH0.DIOxLzVzgRddxZpqd8of_YpSMLR93UE9EHAAdun8XzU";
+const supabaseClient=(SUPABASE_URL&&SUPABASE_ANON_KEY)
+  ? supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY)
+  : null;
+
 // ============ DATA ============
 const FIELD_LABELS={sayisal:"Sayısal",ea:"Eşit Ağırlık",sozel:"Sözel"};
 const SUBJECTS_DATA = {
@@ -1234,8 +1335,150 @@ if("serviceWorker"in navigator){
   });
 }
 
+// ============ AUTH (ÖĞRENCİ ERİŞİM KONTROLÜ) ============
+function getInviteCodeFromUrl(){
+  return new URLSearchParams(location.search).get("invite")||"";
+}
+function showAuthTab(tab){
+  document.getElementById("authLoading").style.display="none";
+  document.getElementById("authFormWrap").style.display="block";
+  document.querySelectorAll(".auth-tab-btn").forEach(b=>b.classList.remove("on"));
+  document.querySelectorAll(".auth-panel").forEach(p=>p.classList.remove("on"));
+  document.querySelectorAll(".auth-tab-btn")[tab==="login"?0:1].classList.add("on");
+  document.getElementById(tab==="login"?"authPanelLogin":"authPanelSignup").classList.add("on");
+  clearAuthError();
+}
+function authError(msg){
+  const el=document.getElementById("authError");
+  el.textContent=msg;el.classList.add("show");
+}
+function clearAuthError(){
+  const el=document.getElementById("authError");
+  el.textContent="";el.classList.remove("show");
+}
+function togglePwVisibility(id,btn){
+  const input=document.getElementById(id);
+  const show=input.type==="password";
+  input.type=show?"text":"password";
+  btn.textContent=show?"🙈":"👁️";
+}
+async function handleLogin(){
+  if(!supabaseClient){authError("Uygulama henüz yapılandırılmadı (Supabase bağlantısı eksik).");return;}
+  clearAuthError();
+  const email=document.getElementById("loginEmail").value.trim();
+  const password=document.getElementById("loginPassword").value;
+  if(!email||!password){authError("E-posta ve şifre gerekli.");return;}
+  const{error}=await supabaseClient.auth.signInWithPassword({email,password});
+  if(error){authError("Giriş başarısız: e-posta veya şifre hatalı.");return;}
+  await onAuthSuccess();
+}
+async function handleSignup(){
+  if(!supabaseClient){authError("Uygulama henüz yapılandırılmadı (Supabase bağlantısı eksik).");return;}
+  clearAuthError();
+  const code=document.getElementById("signupInvite").value.trim();
+  const nickname=document.getElementById("signupNickname").value.trim();
+  const email=document.getElementById("signupEmail").value.trim();
+  const password=document.getElementById("signupPassword").value;
+  const confirm=document.getElementById("signupPasswordConfirm").value;
+  if(!code){authError("Davet kodu gerekli.");return;}
+  if(!email||!password){authError("E-posta ve şifre gerekli.");return;}
+  if(password.length<6){authError("Şifre en az 6 karakter olmalı.");return;}
+  if(password!==confirm){authError("Şifreler eşleşmiyor.");return;}
+  const{data,error}=await supabaseClient.auth.signUp({email,password});
+  if(error){authError("Kayıt başarısız: "+(error.message||"bilinmeyen hata"));return;}
+  if(!data.session){
+    authError("Hesap oluşturuldu. E-postana bir onay linki gelmiş olabilir — onayladıktan sonra giriş yapıp davet kodunu tekrar gir.");
+    return;
+  }
+  await handleRedeemInvite(code,nickname);
+}
+async function handleRedeemInvite(code,nickname){
+  const{error}=await supabaseClient.rpc("redeem_invite_code",{p_code:code,p_full_name:nickname||null});
+  if(error){
+    authError("Davet kodu geçersiz, süresi dolmuş ya da zaten kullanılmış.");
+    return;
+  }
+  await onAuthSuccess();
+}
+let currentNickname="";
+async function onAuthSuccess(){
+  clearAuthError();
+  const{data:{user}}=await supabaseClient.auth.getUser();
+  if(user){
+    const{data:profile}=await supabaseClient.from("profiles").select("full_name").eq("id",user.id).maybeSingle();
+    currentNickname=profile?.full_name||"";
+    setUserGreeting(currentNickname,user.email);
+  }
+  document.getElementById("authOverlay").classList.remove("open");
+  startApp();
+}
+function setUserGreeting(fullName,email){
+  const el=document.getElementById("userGreeting");
+  if(!el)return;
+  const name=(fullName&&fullName.trim())||(email?email.split("@")[0]:"")||"Öğrenci";
+  el.textContent="👋 "+name;
+}
+function openNicknameEdit(){
+  if(!supabaseClient)return;
+  document.getElementById("nicknameInput").value=currentNickname;
+  document.getElementById("nicknameError").classList.remove("show");
+  document.getElementById("nicknameOverlay").classList.add("open");
+}
+function closeNicknameEdit(){document.getElementById("nicknameOverlay").classList.remove("open");}
+async function saveNickname(){
+  const errEl=document.getElementById("nicknameError");
+  errEl.classList.remove("show");
+  const name=document.getElementById("nicknameInput").value.trim();
+  const{error}=await supabaseClient.rpc("update_my_nickname",{p_full_name:name||null});
+  if(error){
+    errEl.textContent="Kaydedilemedi, tekrar dene.";
+    errEl.classList.add("show");
+    return;
+  }
+  currentNickname=name;
+  const{data:{user}}=await supabaseClient.auth.getUser();
+  setUserGreeting(name,user?.email);
+  closeNicknameEdit();
+  showToast("✏️ Takma adın güncellendi!");
+}
+async function handleLogout(){
+  if(supabaseClient)await supabaseClient.auth.signOut();
+  // location.pathname (URL'den ?invite=... gibi query string'i atar) ile
+  // yeniden yükle, yoksa çıkış sonrası hâlâ "Kayıt Ol" sekmesi açık kalır.
+  location.href=location.pathname;
+}
+async function handleForgotPassword(){
+  if(!supabaseClient){authError("Uygulama henüz yapılandırılmadı (Supabase bağlantısı eksik).");return;}
+  const email=document.getElementById("loginEmail").value.trim();
+  if(!email){authError("Şifre sıfırlamak için önce e-postanı gir.");return;}
+  const{error}=await supabaseClient.auth.resetPasswordForEmail(email);
+  if(error){authError("Şifre sıfırlama isteği gönderilemedi.");return;}
+  authError("İstek varsa e-postana bir şifre sıfırlama linki gönderildi.");
+}
+async function checkSessionAndGate(){
+  const invite=getInviteCodeFromUrl();
+  if(invite)document.getElementById("signupInvite").value=invite;
+  if(!supabaseClient){
+    showAuthTab(invite?"signup":"login");
+    authError("Uygulama henüz yapılandırılmadı (Supabase bağlantısı eksik). Lütfen daha sonra tekrar dene.");
+    return;
+  }
+  const{data:{session}}=await supabaseClient.auth.getSession();
+  if(!session){
+    showAuthTab(invite?"signup":"login");
+    return;
+  }
+  const{data:profile}=await supabaseClient.from("profiles").select("id").eq("id",session.user.id).maybeSingle();
+  if(!profile){
+    showAuthTab("signup");
+    authError("Hesabın var ama davet kodun henüz doğrulanmamış. Kodunu gir ve tekrar dene.");
+    return;
+  }
+  await onAuthSuccess();
+}
+
 // ============ INIT ============
-window.addEventListener('DOMContentLoaded',()=>{
+function startApp(){
   load();
   applyTheme();
   buildSelects();
@@ -1248,6 +1491,9 @@ window.addEventListener('DOMContentLoaded',()=>{
   startAlarmChecker();
   startDayRolloverChecker();
   requestNotifPerm();
+}
+window.addEventListener('DOMContentLoaded',()=>{
+  checkSessionAndGate();
 });
 function requestNotifPerm(){
   if("Notification"in window&&Notification.permission==="default")Notification.requestPermission();
@@ -3023,7 +3269,7 @@ function switchTab(id,btn){
 }
 
 // Close modals on overlay click
-["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay","chestOverlay","crisisOverlay"].forEach(id=>{
+["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay","chestOverlay","crisisOverlay","nicknameOverlay"].forEach(id=>{
   document.getElementById(id).addEventListener("click",function(e){
     if(e.target===this)this.classList.remove("open");
   });
