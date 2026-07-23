@@ -1317,7 +1317,7 @@ function openChest(){
      <div style="font-size:.8rem;font-style:italic;color:#c4b5fd;">"${esc(quote)}"</div>`;
   document.getElementById("chestOverlay").classList.add("open");
   launchConfetti(true);
-  save();renderChest();
+  save();renderChest();checkBadges();
 }
 function closeChest(){document.getElementById("chestOverlay").classList.remove("open");}
 
@@ -1938,7 +1938,7 @@ function finishCrisis(key){
     <button class="btn btn-p" style="width:100%;margin-top:14px;" onclick="closeCrisis()">Anladım, devam ediyorum 💪</button>
   `;
   gainXP(10);
-  save();
+  save();checkBadges();
 }
 
 // ============ DENEME ============
@@ -2422,8 +2422,9 @@ function renderHeatmap(){
   const el=document.getElementById("heatmapGrid");
   if(!el)return;
   const log=S.dailyStudyLog||{};
-  // todayStr() is UTC-anchored; do all math in UTC here too so "today" never
-  // drifts a day off depending on the viewer's local timezone (see setUTCDate/getUTCDay).
+  // todayStr() is the viewer's local calendar date; anchor it to UTC midnight here
+  // and do all day-stepping in UTC (setUTCDate/getUTCDay) so DST transitions can't
+  // shift a date by a day while walking the range.
   const today=new Date(todayStr()+"T00:00:00Z");
   const totalDays=364;
   const days=[];
