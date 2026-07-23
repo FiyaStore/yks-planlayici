@@ -185,6 +185,10 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);
 .tmpl-day-btn:hover:not(.on){background:var(--card-h);}
 .tmpl-block{background:var(--card);border:1px solid var(--border);border-radius:12px;
   padding:9px 12px;margin-bottom:6px;display:flex;align-items:center;gap:9px;}
+.gen-day-title{font-size:.76rem;font-weight:900;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.04em;margin:12px 0 6px;}
+.gen-day-title:first-child{margin-top:0;}
+.gen-reason{font-size:.7rem;color:var(--muted);font-weight:700;margin:-3px 0 7px 2px;line-height:1.4;}
 
 /* TIMER */
 .timer-wrap{text-align:center;padding:8px 0 4px;}
@@ -667,6 +671,19 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
   </div>
 </div>
 
+<!-- GENERATOR MODAL -->
+<div class="overlay" id="generatorOverlay">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title">🤖 Haftalık Program Önerisi</div>
+    <div class="alarm-note" id="genSummaryLine"></div>
+    <div id="genPreviewBody"></div>
+    <div class="modal-actions" style="margin-top:12px;">
+      <button class="btn btn-p" style="flex:1" onclick="confirmGeneratorPlan()">✓ Onayla ve Uygula</button>
+      <button class="btn btn-s" style="flex:1" onclick="closeGenerator()">İptal</button>
+    </div>
+  </div>
+</div>
+
 <!-- PRINT AREA (only rendered onto the page when printing the weekly template) -->
 <div id="printArea" class="print-only"></div>
 
@@ -680,6 +697,13 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
     <input class="fi" id="goalUni" placeholder="ör. Boğaziçi Üniversitesi" style="margin-bottom:10px;">
     <div class="field-lbl">Hedef Bölüm</div>
     <input class="fi" id="goalDept" placeholder="ör. Bilgisayar Mühendisliği" style="margin-bottom:10px;">
+    <div class="field-lbl">Alanın (AYT)</div>
+    <select class="fs" id="goalField" style="margin-bottom:10px;">
+      <option value="">-- Alan Seç --</option>
+      <option value="sayisal">Sayısal</option>
+      <option value="ea">Eşit Ağırlık</option>
+      <option value="sozel">Sözel</option>
+    </select>
     <div class="field-lbl">Hedef Puan</div>
     <input class="fi" type="number" id="goalScore" placeholder="ör. 480" style="margin-bottom:10px;">
     <div class="form-row">
@@ -869,9 +893,10 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
           <button class="btn btn-g btn-sm" onclick="addBlock()">✓ Ekle (+10 XP)</button>
         </div>
       </div>
-      <div style="display:flex;gap:7px;margin-top:7px;">
-        <button class="btn btn-s btn-sm" style="flex:1" onclick="openTemplate()">🗓️ Haftalık Şablon</button>
-        <button class="btn btn-s btn-sm" style="flex:1" onclick="loadTemplateToday()">📥 Şablondan Yükle</button>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;">
+        <button class="btn btn-s btn-sm" style="flex:1;min-width:110px" onclick="openTemplate()">🗓️ Haftalık Şablon</button>
+        <button class="btn btn-s btn-sm" style="flex:1;min-width:110px" onclick="loadTemplateToday()">📥 Şablondan Yükle</button>
+        <button class="btn btn-p btn-sm" style="flex:1;min-width:110px" onclick="openGenerator()">🤖 Program Oluştur</button>
       </div>
     </div>
   </div>
@@ -1201,6 +1226,7 @@ function defaultState(){
     studentName:"",snapTheme:"cosmic",
     denemeler:[],
     examDate:"",targetUni:"",targetDept:"",targetScore:null,targetNetTyt:null,targetNetAyt:null,
+    studentField:"",
     weeklyTemplate:{0:[],1:[],2:[],3:[],4:[],5:[],6:[]},
     hatalar:[],todayHataAdded:0,todayHataLearned:0,
     rewards:[],
@@ -1251,6 +1277,7 @@ function normalizeState(){
   if(S.targetScore===undefined)S.targetScore=null;
   if(S.targetNetTyt===undefined)S.targetNetTyt=null;
   if(S.targetNetAyt===undefined)S.targetNetAyt=null;
+  if(S.studentField===undefined)S.studentField="";
   if(!S.weeklyTemplate)S.weeklyTemplate={};
   for(let i=0;i<7;i++)if(!S.weeklyTemplate[i])S.weeklyTemplate[i]=[];
   if(!S.hatalar)S.hatalar=[];
@@ -1746,6 +1773,230 @@ function applyTemplateToToday(showFeedback){
 }
 function loadTemplateToday(){applyTemplateToToday(true);}
 
+// ============ WEEKLY GENERATOR ============
+let generatorProposal=null;
+function getEffectiveStudentField(){
+  if(S.studentField)return S.studentField;
+  const counts={sayisal:0,ea:0,sozel:0};
+  (S.denemeler||[]).forEach(d=>{if(counts[d.type]!==undefined)counts[d.type]++;});
+  const ranked=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  return ranked[0][1]>0?ranked[0][0]:null;
+}
+function maxQForSubject(type,subj){
+  const pair=(DENEME_TYPES[type]?.subjects||[]).find(([n])=>n===subj);
+  return pair?pair[1]:null;
+}
+function getRelevantSubjects(effectiveField){
+  const tyt=Object.keys(SUBJECTS_DATA).filter(n=>SUBJECTS_DATA[n].type==="tyt");
+  const ayt=Object.keys(SUBJECTS_DATA).filter(n=>SUBJECTS_DATA[n].type==="ayt"&&(SUBJECTS_DATA[n].fields||[]).includes(effectiveField));
+  return[...tyt,...ayt];
+}
+function computeSubjectWeakness(subj,effectiveField){
+  const data=SUBJECTS_DATA[subj];
+  const relevantType=data.type==="tyt"?"tyt":effectiveField;
+  const totalTopics=data.topics.length;
+  const doneTopics=Object.values(S.subjects[subj]?.topics||{}).filter(Boolean).length;
+  const incompleteFrac=totalTopics?1-(doneTopics/totalTopics):0;
+
+  let weekMins=0;
+  for(let i=0;i<7;i++){
+    const day=S.subjectStudyLog[daysAgoUTC(i)]||{};
+    weekMins+=day[subj]||0;
+  }
+  const neglect=(weekMins===0&&doneTopics<totalTopics)?1:0;
+
+  const relevantDenemeler=(S.denemeler||[]).filter(d=>d.type===relevantType&&d.results&&d.results[subj]);
+
+  if(relevantDenemeler.length===0){
+    return{subject:subj,score:0.7*incompleteFrac+0.3*neglect,coldStart:true,netFrac:null,trendComponent:null,neglect,incompleteFrac};
+  }
+
+  const maxQ=maxQForSubject(relevantType,subj)||1;
+  const last=relevantDenemeler[relevantDenemeler.length-1];
+  const netFrac=Math.max(0,Math.min(1,last.results[subj].net/maxQ));
+  const netWeakness=1-netFrac;
+
+  let trendComponent=0.5;
+  const recent3=relevantDenemeler.slice(-3);
+  if(recent3.length>=2){
+    const delta=recent3[recent3.length-1].results[subj].net-recent3[0].results[subj].net;
+    const normalized=Math.max(-1,Math.min(1,-delta/(maxQ*0.3)));
+    trendComponent=(normalized+1)/2;
+  }
+
+  const score=0.5*netWeakness+0.2*trendComponent+0.3*neglect;
+  return{subject:subj,score,coldStart:false,netFrac,trendComponent,neglect,incompleteFrac};
+}
+function nextTopicForSubject(subj,usedTopics){
+  const topics=SUBJECTS_DATA[subj].topics;
+  const doneMap=S.subjects[subj]?.topics||{};
+  const incomplete=topics.filter(t=>!doneMap[t]&&!usedTopics.has(t));
+  return incomplete.length?incomplete[0]:"";
+}
+function estimateWeeklyBudgetMinutes(){
+  const activeDays=[];
+  for(let i=0;i<21;i++){
+    const mins=S.dailyStudyLog[daysAgoUTC(i)];
+    if(mins>0)activeDays.push(mins);
+  }
+  if(activeDays.length===0)return 300;
+
+  const avgPerActiveDay=activeDays.reduce((a,b)=>a+b,0)/activeDays.length;
+  let assumedActiveDaysPerWeek;
+  if(activeDays.length<3)assumedActiveDaysPerWeek=3;
+  else if(activeDays.length<7)assumedActiveDaysPerWeek=5;
+  else assumedActiveDaysPerWeek=6;
+
+  let estimate=avgPerActiveDay*assumedActiveDaysPerWeek;
+  if(activeDays.length<3)estimate*=0.6;
+
+  const FLOOR=180,CAP=1500;
+  return Math.round(Math.max(FLOOR,Math.min(CAP,estimate)));
+}
+const GEN_DURS=[120,90,60,45,25];
+const GEN_MAX_BLOCKS_PER_DAY=4;
+const GEN_MAX_SUBJECTS_PER_DAY=4;
+const GEN_WEIGHT_BASELINE=0.15;
+function distributeGeneratorBlocks(weeklyBudget,rankedSubjects,emptyWeekdays){
+  const totalWeight=rankedSubjects.reduce((a,s)=>a+(s.score+GEN_WEIGHT_BASELINE),0);
+  const targetMinutes={};
+  rankedSubjects.forEach(s=>{targetMinutes[s.subject]=weeklyBudget*(s.score+GEN_WEIGHT_BASELINE)/totalWeight;});
+  const allocated={};rankedSubjects.forEach(s=>{allocated[s.subject]=0;});
+  const usedTopicsBySubject={};rankedSubjects.forEach(s=>{usedTopicsBySubject[s.subject]=new Set();});
+
+  // Ağırlıklı round-robin, blok blok: hedef dakikayı derse önceden bölüp sonra
+  // 25dk'ya bölünmeye çalışmak yerine (çok sayıda ders varken hiçbir dersin payı
+  // tek bir bloğu bile doldurmaya yetmeyip toplu olarak 0 blok üretebiliyordu),
+  // her adımda hedefinden en çok geride kalan derse (oransal olarak) bir blok
+  // veriliyor — bütçe tükenene kadar. Böylece bütçe kaç derse bölünürse
+  // bölünsün en azından bir kısmı gerçek bloklara dönüşüyor.
+  const interleaved=[];
+  let remainingBudget=weeklyBudget;
+  const minBlock=GEN_DURS[GEN_DURS.length-1];
+  while(remainingBudget>=minBlock){
+    let best=null,bestDeficit=-Infinity;
+    rankedSubjects.forEach(s=>{
+      const target=targetMinutes[s.subject];
+      if(target<=0)return;
+      const deficit=(target-allocated[s.subject])/target;
+      if(deficit>bestDeficit){bestDeficit=deficit;best=s;}
+    });
+    if(!best||bestDeficit<=0)break;
+    const dur=GEN_DURS.find(d=>d<=remainingBudget)||minBlock;
+    if(dur>remainingBudget)break;
+    const topic=nextTopicForSubject(best.subject,usedTopicsBySubject[best.subject]);
+    if(topic)usedTopicsBySubject[best.subject].add(topic);
+    interleaved.push({subject:best.subject,topic,dur});
+    allocated[best.subject]+=dur;
+    remainingBudget-=dur;
+  }
+
+  const dayAssign={};emptyWeekdays.forEach(d=>dayAssign[d]={blocks:[],subjects:new Set()});
+  let dayCursor=0;
+  for(const blk of interleaved){
+    let placed=false,attempts=0;
+    while(!placed&&attempts<emptyWeekdays.length){
+      const day=emptyWeekdays[dayCursor%emptyWeekdays.length];
+      const da=dayAssign[day];
+      const subjOk=da.subjects.has(blk.subject)||da.subjects.size<GEN_MAX_SUBJECTS_PER_DAY;
+      if(da.blocks.length<GEN_MAX_BLOCKS_PER_DAY&&subjOk){
+        da.blocks.push(blk);da.subjects.add(blk.subject);placed=true;
+      }
+      dayCursor++;attempts++;
+    }
+  }
+  return dayAssign;
+}
+function reasonForSubject(subj,detail,rankIndex){
+  const icon=SUBJECTS_DATA[subj].icon;
+  if(detail.coldStart){
+    const pctDone=Math.round((1-detail.incompleteFrac)*100);
+    return`${icon} ${esc(subj)} — konuların %${pctDone}'i tamam, henüz deneme verisi yok`;
+  }
+  const pct=Math.round(detail.netFrac*100);
+  if(rankIndex===0)return`${icon} ${esc(subj)} — son denemede %${pct} net, en zayıf ders`;
+  if(detail.neglect)return`${icon} ${esc(subj)} — bu hafta hiç çalışılmadı`;
+  if(detail.trendComponent>0.6)return`${icon} ${esc(subj)} — netlerin son denemelerde düşüş eğiliminde`;
+  return`${icon} ${esc(subj)} — son denemede %${pct} net`;
+}
+function computeGeneratorProposal(){
+  const effectiveField=getEffectiveStudentField();
+  if(!effectiveField)return null;
+  const emptyWeekdays=[0,1,2,3,4,5,6].filter(d=>!(S.weeklyTemplate[d]&&S.weeklyTemplate[d].length));
+  if(!emptyWeekdays.length)return{effectiveField,emptyWeekdays,budgetMinutes:0,dayAssign:{},scored:[]};
+
+  const relevant=getRelevantSubjects(effectiveField);
+  const scored=relevant.map(subj=>computeSubjectWeakness(subj,effectiveField)).sort((a,b)=>b.score-a.score);
+  const budgetMinutes=estimateWeeklyBudgetMinutes();
+  const dayAssign=distributeGeneratorBlocks(budgetMinutes,scored,emptyWeekdays);
+  return{effectiveField,emptyWeekdays,budgetMinutes,dayAssign,scored};
+}
+function openGenerator(){
+  const proposal=computeGeneratorProposal();
+  if(!proposal){
+    showToast("🎓 Önce Hedef ekranından alanını (Sayısal/EA/Sözel) seç.");
+    openGoal();
+    return;
+  }
+  if(!proposal.emptyWeekdays.length){
+    showToast("📭 Tüm günlerin şablonu dolu. Program oluşturmak için önce bir gün boşalt.");
+    return;
+  }
+  generatorProposal=proposal;
+  renderGeneratorPreview(proposal);
+  document.getElementById("generatorOverlay").classList.add("open");
+}
+function closeGenerator(){
+  document.getElementById("generatorOverlay").classList.remove("open");
+  generatorProposal=null;
+}
+function renderGeneratorPreview(proposal){
+  const hrs=(proposal.budgetMinutes/60).toFixed(1).replace(/\.0$/,"");
+  document.getElementById("genSummaryLine").textContent=
+    proposal.budgetMinutes>0
+      ? `Bu hafta için tahmini ~${hrs} saatlik bir program önerildi, sadece boş günlere eklendi.`
+      : "Önerilecek bir şey bulunamadı.";
+  const order=[1,2,3,4,5,6,0];
+  const dayLabels={0:"Pazar",1:"Pazartesi",2:"Salı",3:"Çarşamba",4:"Perşembe",5:"Cuma",6:"Cumartesi"};
+  const scoredByName={};
+  proposal.scored.forEach((s,i)=>{scoredByName[s.subject]={detail:s,rankIndex:i};});
+  let html="";
+  order.forEach(day=>{
+    const da=proposal.dayAssign[day];
+    if(!da||!da.blocks.length)return;
+    html+=`<div class="gen-day-title">${dayLabels[day]}</div>`;
+    const seenSubjects=new Set();
+    da.blocks.forEach(b=>{
+      if(!seenSubjects.has(b.subject)){
+        seenSubjects.add(b.subject);
+        const info=scoredByName[b.subject];
+        if(info)html+=`<div class="gen-reason">${reasonForSubject(b.subject,info.detail,info.rankIndex)}</div>`;
+      }
+      html+=`<div class="tmpl-block">
+        <div class="binfo">
+          <div class="bsubj">${SUBJECTS_DATA[b.subject]?.icon||"📖"} ${esc(b.subject)}</div>
+          <div class="btopic">${esc(b.topic)||"Genel çalışma"}</div>
+        </div>
+        <div class="bdur">${b.dur} dk</div>
+      </div>`;
+    });
+  });
+  document.getElementById("genPreviewBody").innerHTML=html||'<div style="text-align:center;color:var(--muted);font-size:.83rem;padding:14px;font-weight:700;">Önerilecek bir şey bulunamadı.</div>';
+}
+function confirmGeneratorPlan(){
+  if(!generatorProposal)return;
+  Object.entries(generatorProposal.dayAssign).forEach(([day,da])=>{
+    if(!da.blocks.length)return;
+    if(!S.weeklyTemplate[day])S.weeklyTemplate[day]=[];
+    da.blocks.forEach(b=>{
+      S.weeklyTemplate[day].push({subject:b.subject,topic:b.topic,time:"",dur:b.dur});
+    });
+  });
+  save();
+  closeGenerator();
+  showToast("🤖 Program şablona eklendi!");
+}
+
 // ============ TIMER ============
 let timerInterval=null,timerRunning=false,timerMode="work",timerSecs=25*60,timerTotal=25*60,cyclesDone=0;
 const CIRCUM=2*Math.PI*80;
@@ -2040,6 +2291,7 @@ function openGoal(){
   document.getElementById("goalExamDate").value=S.examDate||"";
   document.getElementById("goalUni").value=S.targetUni||"";
   document.getElementById("goalDept").value=S.targetDept||"";
+  document.getElementById("goalField").value=S.studentField||"";
   document.getElementById("goalScore").value=S.targetScore||"";
   document.getElementById("goalNetTyt").value=S.targetNetTyt||"";
   document.getElementById("goalNetAyt").value=S.targetNetAyt||"";
@@ -2050,6 +2302,7 @@ function saveGoal(){
   S.examDate=document.getElementById("goalExamDate").value;
   S.targetUni=document.getElementById("goalUni").value.trim();
   S.targetDept=document.getElementById("goalDept").value.trim();
+  S.studentField=document.getElementById("goalField").value;
   const score=parseFloat(document.getElementById("goalScore").value);
   const netTyt=parseFloat(document.getElementById("goalNetTyt").value);
   const netAyt=parseFloat(document.getElementById("goalNetAyt").value);
@@ -3269,7 +3522,7 @@ function switchTab(id,btn){
 }
 
 // Close modals on overlay click
-["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay","chestOverlay","crisisOverlay","nicknameOverlay"].forEach(id=>{
+["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay","chestOverlay","crisisOverlay","nicknameOverlay","generatorOverlay"].forEach(id=>{
   document.getElementById(id).addEventListener("click",function(e){
     if(e.target===this)this.classList.remove("open");
   });
