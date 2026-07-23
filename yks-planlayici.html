@@ -305,6 +305,18 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 .dn-net-lbl{font-size:.6rem;color:var(--muted);font-weight:700;text-align:right;}
 .dn-breakdown{font-size:.7rem;color:var(--muted);font-weight:600;margin-top:8px;line-height:1.5;}
 
+/* HEATMAP */
+.heatmap-scroll{overflow-x:auto;padding-bottom:4px;}
+.heatmap-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,11px);
+  grid-auto-columns:11px;gap:3px;width:max-content;}
+.heatmap-cell{width:11px;height:11px;border-radius:3px;background:var(--border);}
+.heatmap-cell[data-lvl="1"]{background:var(--green);opacity:.3;}
+.heatmap-cell[data-lvl="2"]{background:var(--green);opacity:.55;}
+.heatmap-cell[data-lvl="3"]{background:var(--green);opacity:.78;}
+.heatmap-cell[data-lvl="4"]{background:var(--green);opacity:1;}
+.heatmap-legend{display:flex;align-items:center;gap:4px;margin-top:8px;
+  font-size:.66rem;color:var(--muted);font-weight:700;}
+
 /* STATS */
 .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px;}
 .stat-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:center;}
@@ -808,6 +820,19 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
       <div class="stat-box"><div class="stat-val" id="st-topics">0</div><div class="stat-desc">✅ Toplam Konu</div></div>
     </div>
     <div class="card">
+      <div class="card-title">🔥 Çalışma Isı Haritası</div>
+      <div class="heatmap-scroll"><div class="heatmap-grid" id="heatmapGrid"></div></div>
+      <div class="heatmap-legend">
+        <span>Az</span>
+        <div class="heatmap-cell" data-lvl="0"></div>
+        <div class="heatmap-cell" data-lvl="1"></div>
+        <div class="heatmap-cell" data-lvl="2"></div>
+        <div class="heatmap-cell" data-lvl="3"></div>
+        <div class="heatmap-cell" data-lvl="4"></div>
+        <span>Çok</span>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-title">📈 Haftalık Çalışma</div>
       <div class="week-chart" id="weekChart"></div>
     </div>
@@ -991,7 +1016,13 @@ function defaultState(){
     rewards:[],
     dailyChestDate:"",
     activeTheme:"kozmik",
+    dailyStudyLog:{},
   };
+}
+function logStudyMinutes(delta){
+  S.todayMins=Math.max(0,S.todayMins+delta);
+  const key=todayStr();
+  S.dailyStudyLog[key]=Math.max(0,(S.dailyStudyLog[key]||0)+delta);
 }
 function save(){localStorage.setItem("yks2025v2",JSON.stringify(S));}
 function load(){
@@ -1030,6 +1061,7 @@ function normalizeState(){
   if(!S.rewards)S.rewards=[];
   if(S.dailyChestDate===undefined)S.dailyChestDate="";
   if(!S.activeTheme||!THEMES[S.activeTheme])S.activeTheme="kozmik";
+  if(!S.dailyStudyLog)S.dailyStudyLog={};
   if(!S.subjects)S.subjects={};
   for(const[n,d] of Object.entries(SUBJECTS_DATA)){
     if(!S.subjects[n])S.subjects[n]={topics:{}};
@@ -1233,14 +1265,14 @@ function toggleBlock(i){
   b.done=!b.done;
   if(b.done){
     gainXP(20);
-    S.todayMins+=b.dur;
+    logStudyMinutes(b.dur);
     S.weeklyMins[S.weeklyMins.length-1]+=b.dur;
     showToast("✅ Harika! +"+b.dur+" dk çalışma kaydedildi!");
     launchConfetti();
     checkStreak();
   }else{
     S.xp=Math.max(0,S.xp-20);
-    S.todayMins=Math.max(0,S.todayMins-b.dur);
+    logStudyMinutes(-b.dur);
     S.weeklyMins[S.weeklyMins.length-1]=Math.max(0,S.weeklyMins[S.weeklyMins.length-1]-b.dur);
   }
   save();renderAll();checkQuestProgress();checkBadges();
@@ -1376,7 +1408,7 @@ function onTimerDone(){
   playAlarmSound();
   if(timerMode==="work"){
     cyclesDone++;S.todayPomodoros++;S.totalPomodoros++;
-    S.todayMins+=25;S.weeklyMins[S.weeklyMins.length-1]+=25;
+    logStudyMinutes(25);S.weeklyMins[S.weeklyMins.length-1]+=25;
     gainXP(30);checkStreak();
     const subj=document.getElementById("timerSubject").value;
     showToast("🍅 Pomodoro tamamlandı! +30 XP 🎉"+(subj?"\n"+subj+" — 25 dk!":""));
@@ -2110,9 +2142,40 @@ function flashAnswer(knewIt){
 }
 
 // ============ STATS ============
+function heatmapLevel(mins){
+  if(mins<=0)return 0;
+  if(mins<30)return 1;
+  if(mins<60)return 2;
+  if(mins<120)return 3;
+  return 4;
+}
+function renderHeatmap(){
+  const el=document.getElementById("heatmapGrid");
+  if(!el)return;
+  const log=S.dailyStudyLog||{};
+  // todayStr() is UTC-anchored; do all math in UTC here too so "today" never
+  // drifts a day off depending on the viewer's local timezone (see setUTCDate/getUTCDay).
+  const today=new Date(todayStr()+"T00:00:00Z");
+  const totalDays=364;
+  const days=[];
+  for(let i=totalDays;i>=0;i--){
+    const d=new Date(today);
+    d.setUTCDate(d.getUTCDate()-i);
+    const key=d.toISOString().slice(0,10);
+    days.push({date:key,mins:log[key]||0,weekday:d.getUTCDay()});
+  }
+  const padded=Array(days[0].weekday).fill(null).concat(days);
+  el.innerHTML=padded.map(d=>{
+    if(!d)return '<div class="heatmap-cell"></div>';
+    const lvl=heatmapLevel(d.mins);
+    const label=formatTrDate(d.date)+" — "+d.mins+" dk";
+    return `<div class="heatmap-cell" data-lvl="${lvl}" title="${esc(label)}"></div>`;
+  }).join("");
+}
 function renderStats(){
   renderRewards();
   renderThemes();
+  renderHeatmap();
   document.getElementById("st-streak").textContent=S.streak;
   document.getElementById("st-mins").textContent=S.todayMins;
   const tot=Object.values(S.subjects).reduce((a,s)=>a+Object.values(s.topics).filter(Boolean).length,0);
