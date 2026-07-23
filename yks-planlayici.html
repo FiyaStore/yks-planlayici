@@ -56,6 +56,9 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap;}
 .user-greeting{font-size:.78rem;font-weight:700;color:var(--muted);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;max-width:140px;}
+.nickname-edit-btn{background:none;border:none;color:var(--muted);cursor:pointer;
+  font-size:.78rem;padding:2px 4px;line-height:1;flex-shrink:0;}
+.nickname-edit-btn:hover{color:var(--text);}
 .hdr-chips{display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap;}
 .chip{display:flex;align-items:center;gap:4px;border-radius:20px;padding:4px 10px;
   font-size:.72rem;font-weight:800;border:1px solid var(--border);background:var(--card);}
@@ -552,6 +555,7 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
   <div class="hdr-in">
     <div class="logo">🎯 YKS Planlayıcım</div>
     <div class="user-greeting" id="userGreeting"></div>
+    <button class="nickname-edit-btn" onclick="openNicknameEdit()" title="Takma adını değiştir">✏️</button>
     <div class="hdr-chips">
       <div class="chip chip-s">🔥 <span id="streakNum">0</span> gün</div>
       <div class="chip chip-x">⚡ <span id="xpNum">0</span> XP</div>
@@ -750,6 +754,19 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
     </div>
 
     <div class="alarm-note" style="margin-top:14px;margin-bottom:0;text-align:center;">Bir davet kodun yoksa koçundan iste.</div>
+    </div>
+  </div>
+</div>
+
+<!-- NICKNAME EDIT MODAL -->
+<div class="overlay" id="nicknameOverlay">
+  <div class="modal">
+    <div class="modal-title">✏️ Takma Adını Değiştir</div>
+    <input class="fi" id="nicknameInput" placeholder="Adın / Takma Adın" style="margin-bottom:10px;">
+    <div class="auth-error" id="nicknameError"></div>
+    <div class="modal-actions">
+      <button class="btn btn-p" style="flex:1" onclick="saveNickname()">Kaydet</button>
+      <button class="btn btn-s" onclick="closeNicknameEdit()">İptal</button>
     </div>
   </div>
 </div>
@@ -1383,12 +1400,14 @@ async function handleRedeemInvite(code,nickname){
   }
   await onAuthSuccess();
 }
+let currentNickname="";
 async function onAuthSuccess(){
   clearAuthError();
   const{data:{user}}=await supabaseClient.auth.getUser();
   if(user){
     const{data:profile}=await supabaseClient.from("profiles").select("full_name").eq("id",user.id).maybeSingle();
-    setUserGreeting(profile?.full_name,user.email);
+    currentNickname=profile?.full_name||"";
+    setUserGreeting(currentNickname,user.email);
   }
   document.getElementById("authOverlay").classList.remove("open");
   startApp();
@@ -1398,6 +1417,29 @@ function setUserGreeting(fullName,email){
   if(!el)return;
   const name=(fullName&&fullName.trim())||(email?email.split("@")[0]:"")||"Öğrenci";
   el.textContent="👋 "+name;
+}
+function openNicknameEdit(){
+  if(!supabaseClient)return;
+  document.getElementById("nicknameInput").value=currentNickname;
+  document.getElementById("nicknameError").classList.remove("show");
+  document.getElementById("nicknameOverlay").classList.add("open");
+}
+function closeNicknameEdit(){document.getElementById("nicknameOverlay").classList.remove("open");}
+async function saveNickname(){
+  const errEl=document.getElementById("nicknameError");
+  errEl.classList.remove("show");
+  const name=document.getElementById("nicknameInput").value.trim();
+  const{error}=await supabaseClient.rpc("update_my_nickname",{p_full_name:name||null});
+  if(error){
+    errEl.textContent="Kaydedilemedi, tekrar dene.";
+    errEl.classList.add("show");
+    return;
+  }
+  currentNickname=name;
+  const{data:{user}}=await supabaseClient.auth.getUser();
+  setUserGreeting(name,user?.email);
+  closeNicknameEdit();
+  showToast("✏️ Takma adın güncellendi!");
 }
 async function handleLogout(){
   if(supabaseClient)await supabaseClient.auth.signOut();
@@ -3227,7 +3269,7 @@ function switchTab(id,btn){
 }
 
 // Close modals on overlay click
-["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay","chestOverlay","crisisOverlay"].forEach(id=>{
+["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay","chestOverlay","crisisOverlay","nicknameOverlay"].forEach(id=>{
   document.getElementById(id).addEventListener("click",function(e){
     if(e.target===this)this.classList.remove("open");
   });
