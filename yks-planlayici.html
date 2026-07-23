@@ -319,6 +319,15 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 .dn-net-lbl{font-size:.6rem;color:var(--muted);font-weight:700;text-align:right;}
 .dn-breakdown{font-size:.7rem;color:var(--muted);font-weight:600;margin-top:8px;line-height:1.5;}
 
+/* COACH REPORT */
+.coach-line{display:flex;align-items:flex-start;gap:9px;background:var(--card);
+  border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px;
+  font-size:.82rem;font-weight:600;line-height:1.5;}
+.coach-line:last-child{margin-bottom:0;}
+.coach-line b{font-weight:900;}
+.coach-icon{font-size:1rem;flex-shrink:0;line-height:1.5;}
+.coach-empty{text-align:center;color:var(--muted);font-size:.82rem;font-weight:700;padding:10px 0;}
+
 /* HEATMAP */
 .heatmap-scroll{overflow-x:auto;padding-bottom:4px;}
 .heatmap-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,11px);
@@ -871,6 +880,10 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
       <div class="stat-box"><div class="stat-val" id="st-topics">0</div><div class="stat-desc">✅ Toplam Konu</div></div>
     </div>
     <div class="card">
+      <div class="card-title">🤖 Koç Yorumu</div>
+      <div id="coachReport"></div>
+    </div>
+    <div class="card">
       <div class="card-title">🔥 Çalışma Isı Haritası</div>
       <div class="heatmap-scroll"><div class="heatmap-grid" id="heatmapGrid"></div></div>
       <div class="heatmap-legend">
@@ -1068,12 +1081,19 @@ function defaultState(){
     dailyChestDate:"",
     activeTheme:"kozmik",
     dailyStudyLog:{},
+    subjectStudyLog:{},
   };
 }
 function logStudyMinutes(delta){
   S.todayMins=Math.max(0,S.todayMins+delta);
   const key=todayStr();
   S.dailyStudyLog[key]=Math.max(0,(S.dailyStudyLog[key]||0)+delta);
+}
+function logSubjectMinutes(subject,delta){
+  if(!subject)return;
+  const key=todayStr();
+  if(!S.subjectStudyLog[key])S.subjectStudyLog[key]={};
+  S.subjectStudyLog[key][subject]=Math.max(0,(S.subjectStudyLog[key][subject]||0)+delta);
 }
 function save(){localStorage.setItem("yks2025v2",JSON.stringify(S));}
 function load(){
@@ -1113,6 +1133,7 @@ function normalizeState(){
   if(S.dailyChestDate===undefined)S.dailyChestDate="";
   if(!S.activeTheme||!THEMES[S.activeTheme])S.activeTheme="kozmik";
   if(!S.dailyStudyLog)S.dailyStudyLog={};
+  if(!S.subjectStudyLog)S.subjectStudyLog={};
   if(!S.subjects)S.subjects={};
   for(const[n,d] of Object.entries(SUBJECTS_DATA)){
     if(!S.subjects[n])S.subjects[n]={topics:{}};
@@ -1154,6 +1175,11 @@ function todayStr(){
 function daysBetween(a,b){
   const da=new Date(a),db=new Date(b);
   return Math.max(0,Math.round((db-da)/(1000*60*60*24)));
+}
+function daysAgoUTC(n){
+  const d=new Date(todayStr()+"T00:00:00Z");
+  d.setUTCDate(d.getUTCDate()-n);
+  return d.toISOString().slice(0,10);
 }
 function calcLevel(xp){return Math.floor(xp/100)+1;}
 function xpForLevel(lvl){return(lvl-1)*100;}
@@ -1317,6 +1343,7 @@ function toggleBlock(i){
   if(b.done){
     gainXP(20);
     logStudyMinutes(b.dur);
+    logSubjectMinutes(b.subject,b.dur);
     S.weeklyMins[S.weeklyMins.length-1]+=b.dur;
     showToast("✅ Harika! +"+b.dur+" dk çalışma kaydedildi!");
     launchConfetti();
@@ -1324,6 +1351,7 @@ function toggleBlock(i){
   }else{
     S.xp=Math.max(0,S.xp-20);
     logStudyMinutes(-b.dur);
+    logSubjectMinutes(b.subject,-b.dur);
     S.weeklyMins[S.weeklyMins.length-1]=Math.max(0,S.weeklyMins[S.weeklyMins.length-1]-b.dur);
   }
   save();renderAll();checkQuestProgress();checkBadges();
@@ -1488,9 +1516,9 @@ function onTimerDone(){
   playAlarmSound();
   if(timerMode==="work"){
     cyclesDone++;S.todayPomodoros++;S.totalPomodoros++;
-    logStudyMinutes(25);S.weeklyMins[S.weeklyMins.length-1]+=25;
-    gainXP(30);checkStreak();
     const subj=document.getElementById("timerSubject").value;
+    logStudyMinutes(25);logSubjectMinutes(subj,25);S.weeklyMins[S.weeklyMins.length-1]+=25;
+    gainXP(30);checkStreak();
     showToast("🍅 Pomodoro tamamlandı! +30 XP 🎉"+(subj?"\n"+subj+" — 25 dk!":""));
     launchConfetti();
     setMode("break");
@@ -2325,10 +2353,82 @@ function renderHeatmap(){
     return `<div class="heatmap-cell" data-lvl="${lvl}" title="${esc(label)}"></div>`;
   }).join("");
 }
+function generateCoachInsights(){
+  const insights=[];
+
+  // Haftalık ders dağılımı: en çok ve hiç çalışılmayan dersler
+  const weekSubjMins={};
+  for(let i=0;i<7;i++){
+    const day=S.subjectStudyLog[daysAgoUTC(i)]||{};
+    Object.entries(day).forEach(([subj,m])=>{weekSubjMins[subj]=(weekSubjMins[subj]||0)+m;});
+  }
+  const sortedSubj=Object.entries(weekSubjMins).filter(([,m])=>m>0).sort((a,b)=>b[1]-a[1]);
+  const weekTotal=sortedSubj.reduce((a,[,m])=>a+m,0);
+
+  if(sortedSubj.length){
+    const [topSubj,topMins]=sortedSubj[0];
+    const hrs=(topMins/60).toFixed(1).replace(/\.0$/,"");
+    insights.push({icon:"👏",html:`Bu hafta en çok <b>${SUBJECTS_DATA[topSubj]?.icon||"📖"} ${esc(topSubj)}</b> çalışmışsın (${hrs} saat). Odağın belli, harika gidiyor!`});
+  }
+
+  // Deneme net trendi: son 3 deneme (aynı tür) içinde en çok gerileyen ve en çok yükselen ders
+  if(S.denemeler.length>=2){
+    const lastType=S.denemeler[S.denemeler.length-1].type;
+    const sameType=S.denemeler.filter(d=>d.type===lastType).slice(-3);
+    if(sameType.length>=2){
+      const subjNames=Object.keys(sameType[sameType.length-1].results||{});
+      let worstSubj=null,worstDelta=0;
+      let bestSubj=null,bestDelta=0;
+      subjNames.forEach(subj=>{
+        const first=sameType[0].results[subj]?.net;
+        const last=sameType[sameType.length-1].results[subj]?.net;
+        if(first==null||last==null)return;
+        const delta=Math.round((last-first)*100)/100;
+        if(delta<worstDelta){worstDelta=delta;worstSubj=subj;}
+        if(delta>bestDelta){bestDelta=delta;bestSubj=subj;}
+      });
+      if(worstSubj&&sameType.length>=3){
+        insights.push({icon:"📉",html:`<b>${SUBJECTS_DATA[worstSubj]?.icon||"📖"} ${esc(worstSubj)}</b> netlerin son ${sameType.length} denemedir ${worstDelta<0?"düşüyor":"sabit kalmış"}. Önümüzdeki hafta bu derse birkaç çalışma bloğu daha ayırmanı öneririm.`});
+      }
+      if(bestSubj&&bestDelta>0){
+        insights.push({icon:"🚀",html:`<b>${SUBJECTS_DATA[bestSubj]?.icon||"📖"} ${esc(bestSubj)}</b> netlerin +${bestDelta} arttı — bu gidişle devam et!`});
+      }
+    }
+  }
+
+  // İhmal edilen ders: bu hafta hiç çalışılmamış ama diğer dersler çalışılmış
+  if(sortedSubj.length){
+    const studiedSet=new Set(sortedSubj.map(([s])=>s));
+    const neglected=Object.keys(SUBJECTS_DATA).find(s=>!studiedSet.has(s)&&Object.values(S.subjects[s]?.topics||{}).some(v=>!v));
+    if(neglected){
+      insights.push({icon:"🔎",html:`<b>${SUBJECTS_DATA[neglected]?.icon||"📖"} ${esc(neglected)}</b>'ye bu hafta hiç zaman ayırmamışsın. Küçük bir blok bile fark yaratır.`});
+    }
+  }
+
+  // Genel haftalık özet + streak
+  if(weekTotal>0){
+    const hrs=(weekTotal/60).toFixed(1).replace(/\.0$/,"");
+    let streakLine=S.streak>=3?` 🔥 ${S.streak} günlük serini sürdürüyorsun.`:"";
+    insights.unshift({icon:"📊",html:`Bu hafta toplam <b>${hrs} saat</b> çalışmışsın.${streakLine}`});
+  }
+
+  return insights.slice(0,4);
+}
+function renderCoachReport(){
+  const el=document.getElementById("coachReport");
+  if(!el)return;
+  const insights=generateCoachInsights();
+  if(!insights.length){
+    el.innerHTML='<div class="coach-empty">Henüz yeterli veri yok — birkaç gün çalışıp deneme ekledikçe burada sana özel bir analiz göreceksin. 🤖</div>';
+    return;
+  }
+  el.innerHTML=insights.map(ins=>`<div class="coach-line"><span class="coach-icon">${ins.icon}</span><span>${ins.html}</span></div>`).join("");
+}
 function renderStats(){
   renderRewards();
   renderThemes();
   renderHeatmap();
+  renderCoachReport();
   document.getElementById("st-streak").textContent=S.streak;
   document.getElementById("st-mins").textContent=S.todayMins;
   const tot=Object.values(S.subjects).reduce((a,s)=>a+Object.values(s.topics).filter(Boolean).length,0);
