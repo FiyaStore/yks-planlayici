@@ -78,6 +78,19 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);
   padding:16px;margin-bottom:12px;}
 .card-title{font-size:.92rem;font-weight:900;margin-bottom:12px;display:flex;align-items:center;gap:7px;}
 
+/* DAILY CHEST */
+.chest-card{display:flex;align-items:center;gap:12px;
+  background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(236,72,153,.1));
+  border:1px solid rgba(245,158,11,.3);border-radius:16px;padding:12px 14px;
+  margin-bottom:14px;cursor:pointer;transition:all .2s;}
+.chest-card:hover{background:linear-gradient(135deg,rgba(245,158,11,.22),rgba(236,72,153,.16));}
+.chest-card.ready{animation:chest-glow 1.8s infinite;}
+.chest-card.opened{opacity:.5;cursor:default;animation:none;}
+.chest-icon{font-size:1.8rem;flex-shrink:0;}
+.chest-title{font-weight:900;font-size:.88rem;}
+.chest-sub{font-size:.72rem;color:var(--muted);font-weight:700;margin-top:2px;}
+@keyframes chest-glow{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.4);}50%{box-shadow:0 0 0 8px rgba(245,158,11,0);}}
+
 /* QUESTS */
 .quest-card{background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(236,72,153,.06));
   border:1px solid rgba(245,158,11,.2);border-radius:20px;padding:14px;margin-bottom:12px;}
@@ -409,6 +422,15 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- DAILY CHEST MODAL -->
+<div class="overlay" id="chestOverlay">
+  <div class="modal" style="max-width:340px;text-align:center;">
+    <div class="modal-title">🎁 Günün Şans Sandığı!</div>
+    <div id="chestResult"></div>
+    <button class="btn btn-p" style="width:100%;margin-top:14px;" onclick="closeChest()">Harika!</button>
+  </div>
+</div>
+
 <!-- HATA EKLE MODAL -->
 <div class="overlay" id="hataFormOverlay">
   <div class="modal" style="max-width:400px;">
@@ -588,6 +610,14 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 
   <!-- TAB: PLAN -->
   <div class="tab on" id="tab-plan">
+    <!-- DAILY CHEST -->
+    <div class="chest-card" id="chestCard" onclick="openChest()">
+      <div class="chest-icon">🎁</div>
+      <div class="chest-info">
+        <div class="chest-title">Günün Şans Sandığı</div>
+        <div class="chest-sub" id="chestSub">Açmak için dokun!</div>
+      </div>
+    </div>
     <!-- QUESTS -->
     <div class="quest-card">
       <div class="quest-title">🎯 Günlük Görevler</div>
@@ -828,6 +858,20 @@ const QUOTES = [
   "Motivasyon başlatır, alışkanlık devam ettirir. 🔥",
 ];
 const DAYS = ["Paz","Pzt","Sal","Çar","Per","Cum","Cmt"];
+const CHEST_TIPS = [
+  "Pomodoro arasında telefonuna bakma, beynin toparlanamaz. 📵",
+  "Yanlış yaptığın soruyu çöz ama asıl önemlisi NEDEN yanlış yaptığını anlamak.",
+  "Haftalık tekrar yapmadan yeni konuya geçme, unutma eğrisi seni yakalar.",
+  "TYT'de hız, AYT'de derinlik önemlidir — ikisini karıştırma.",
+  "Uykusuz çalışmak, çalışmamaktan daha kötü sonuç verir. 😴",
+  "Her gün aynı saatte çalışmaya başlamak, motivasyon beklemekten daha güçlüdür.",
+  "Deneme sonrası analiz yapmadan yeni bir deneme çözmek zaman kaybıdır.",
+  "Zor bir konuyu sabah, kolay tekrarları akşam yap — beynin öyle çalışır.",
+  "Konu bitirmek yetmez, bol soru çözmeden kalıcı olmaz. ✏️",
+  "Çalışma ortamını dağınık bırakma, zihnin de dağılır.",
+  "Bir soruda 2 dakikadan fazla takılıyorsan işaretle, devam et — geri dön.",
+  "Hedefini büyük tut ama planını küçük, ulaşılabilir adımlara böl.",
+];
 const BADGES_DEF = [
   {id:"first",   icon:"🎉", name:"İlk Adım",    check:s=>s.totalBlocks>=1},
   {id:"str3",    icon:"🔥", name:"3 Gün Seri",   check:s=>s.streak>=3},
@@ -892,6 +936,7 @@ function defaultState(){
     weeklyTemplate:{0:[],1:[],2:[],3:[],4:[],5:[],6:[]},
     hatalar:[],todayHataAdded:0,todayHataLearned:0,
     rewards:[],
+    dailyChestDate:"",
   };
 }
 function save(){localStorage.setItem("yks2025v2",JSON.stringify(S));}
@@ -929,6 +974,7 @@ function normalizeState(){
   if(S.todayHataAdded===undefined)S.todayHataAdded=0;
   if(S.todayHataLearned===undefined)S.todayHataLearned=0;
   if(!S.rewards)S.rewards=[];
+  if(S.dailyChestDate===undefined)S.dailyChestDate="";
   if(!S.subjects)S.subjects={};
   for(const[n,d] of Object.entries(SUBJECTS_DATA)){
     if(!S.subjects[n])S.subjects[n]={topics:{}};
@@ -1030,7 +1076,7 @@ function buildSelects(){
   ["newSubject","timerSubject"].forEach(id=>fillSubjectOptgroups(document.getElementById(id)));
 }
 function renderAll(){
-  renderHeader();renderPlan();renderSubjects();renderQuestList();renderDeneme();renderCountdown();renderHataDefteri();
+  renderHeader();renderPlan();renderSubjects();renderQuestList();renderDeneme();renderCountdown();renderHataDefteri();renderChest();
   if(document.getElementById("tab-stats").classList.contains("on"))renderStats();
 }
 
@@ -1047,6 +1093,32 @@ function renderHeader(){
   btn.className="alarm-btn"+(S.alarmEnabled?" act":"");
   btn.textContent=S.alarmEnabled?"⏰ "+S.alarmTime:"⏰ Alarm";
 }
+
+// ============ DAILY CHEST ============
+function isChestAvailable(){return S.dailyChestDate!==todayStr();}
+function renderChest(){
+  const card=document.getElementById("chestCard");
+  if(!card)return;
+  const available=isChestAvailable();
+  card.className="chest-card"+(available?" ready":" opened");
+  document.getElementById("chestSub").textContent=available?"Açmak için dokun! 🎁":"✅ Bugün açıldı, yarın tekrar gel!";
+}
+function openChest(){
+  if(!isChestAvailable()){showToast("📭 Bugünkü sandığını zaten açtın, yarın tekrar gel!");return;}
+  const bonus=[10,15,20,25,30][Math.floor(Math.random()*5)];
+  const tip=CHEST_TIPS[Math.floor(Math.random()*CHEST_TIPS.length)];
+  const quote=QUOTES[Math.floor(Math.random()*QUOTES.length)];
+  S.dailyChestDate=todayStr();
+  gainXP(bonus);
+  document.getElementById("chestResult").innerHTML=
+    `<div style="font-size:2rem;font-weight:900;background:linear-gradient(135deg,var(--pl),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;">⚡ +${bonus} XP</div>
+     <div style="font-size:.82rem;font-weight:700;margin-bottom:12px;">💡 ${esc(tip)}</div>
+     <div style="font-size:.8rem;font-style:italic;color:#c4b5fd;">"${esc(quote)}"</div>`;
+  document.getElementById("chestOverlay").classList.add("open");
+  launchConfetti(true);
+  save();renderChest();
+}
+function closeChest(){document.getElementById("chestOverlay").classList.remove("open");}
 
 // ============ PLAN ============
 function renderPlan(){
@@ -2093,12 +2165,19 @@ function renderRewards(){
     </div>`;
   }).join("");
 }
+const STREAK_BONUSES={3:50,7:150};
 function checkStreak(){
   const today=todayStr();
   if(S.lastStudyDate===today)return;
   const gap=S.lastStudyDate?daysBetween(S.lastStudyDate,today):null;
   S.streak=(gap===1)?S.streak+1:1;
   S.lastStudyDate=today;
+  const bonus=STREAK_BONUSES[S.streak];
+  if(bonus){
+    showToast("🔥 "+S.streak+" gün üst üste çalıştın! +"+bonus+" BONUS XP! 🎉");
+    launchConfetti(true);
+    gainXP(bonus);
+  }
 }
 function checkBadges(){
   BADGES_DEF.forEach(b=>{
@@ -2423,7 +2502,7 @@ function switchTab(id,btn){
 }
 
 // Close modals on overlay click
-["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay"].forEach(id=>{
+["templateOverlay","goalOverlay","alarmOverlay","snapOverlay","hataFormOverlay","hataViewOverlay","flashOverlay","chestOverlay"].forEach(id=>{
   document.getElementById(id).addEventListener("click",function(e){
     if(e.target===this)this.classList.remove("open");
   });
