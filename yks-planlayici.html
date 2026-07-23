@@ -1385,7 +1385,9 @@ async function onAuthSuccess(){
 }
 async function handleLogout(){
   if(supabaseClient)await supabaseClient.auth.signOut();
-  location.reload();
+  // location.pathname (URL'den ?invite=... gibi query string'i atar) ile
+  // yeniden yükle, yoksa çıkış sonrası hâlâ "Kayıt Ol" sekmesi açık kalır.
+  location.href=location.pathname;
 }
 async function handleForgotPassword(){
   if(!supabaseClient){authError("Uygulama henüz yapılandırılmadı (Supabase bağlantısı eksik).");return;}
