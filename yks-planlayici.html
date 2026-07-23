@@ -1207,7 +1207,7 @@ function addBlock(){
   const time=document.getElementById("newTime").value;
   const dur=parseInt(document.getElementById("newDur").value);
   if(!subj){showToast("❗ Bir ders seçmelisin!");return;}
-  S.todayBlocks.push({subject:subj,topic,time,dur,done:false,id:Date.now()});
+  S.todayBlocks.push({subject:subj,topic,time,dur,done:false,id:Date.now(),addedManually:true});
   S.totalBlocks++;
   gainXP(10);
   toggleAddForm();
@@ -1231,7 +1231,15 @@ function toggleBlock(i){
   }
   save();renderAll();checkQuestProgress();checkBadges();
 }
-function deleteBlock(i){S.todayBlocks.splice(i,1);save();renderPlan();}
+function deleteBlock(i){
+  const b=S.todayBlocks[i];
+  let reclaim=0;
+  if(b.done)reclaim+=20;
+  if(b.addedManually)reclaim+=10;
+  if(reclaim>0){S.xp=Math.max(0,S.xp-reclaim);renderHeader();}
+  S.todayBlocks.splice(i,1);
+  save();renderPlan();
+}
 
 // ============ WEEKLY TEMPLATE ============
 let tmplSelectedDay=new Date().getDay();
@@ -1679,7 +1687,9 @@ function addDeneme(){
   showToast("📝 Deneme kaydedildi! +40 XP");
 }
 function deleteDeneme(id){
-  S.denemeler=S.denemeler.filter(d=>d.id!==id);
+  const d=S.denemeler.find(x=>x.id===id);
+  if(d){S.xp=Math.max(0,S.xp-40);renderHeader();}
+  S.denemeler=S.denemeler.filter(x=>x.id!==id);
   save();renderDeneme();
 }
 function renderDeneme(){
@@ -1884,6 +1894,7 @@ function markHataLearned(id){
 function deleteHata(id){
   const h=S.hatalar.find(x=>x.id===id);
   if(!h)return;
+  if(h.learned){S.xp=Math.max(0,S.xp-25);renderHeader();}
   S.hatalar=S.hatalar.filter(x=>x.id!==id);
   save();renderHataDefteri();
   if(h.questionPhotoId)deletePhoto(h.questionPhotoId);
