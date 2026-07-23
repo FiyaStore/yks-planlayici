@@ -1,4 +1,4 @@
-const CACHE_NAME = "yks-planlayici-v1";
+const CACHE_NAME = "yks-planlayici-v2";
 const APP_SHELL = ["./yks-planlayici.html", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", (e) => {
@@ -15,22 +15,20 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
-// Stale-while-revalidate: serve from cache instantly (works offline),
-// refresh the cache in the background whenever the network is available.
+// Network-first: always try to fetch the latest version while online (so a
+// fresh deploy shows up immediately, no stale "why hasn't this changed" lag),
+// only falling back to the cached copy when there's no connection at all.
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const network = fetch(e.request)
-        .then((res) => {
-          if (res && res.status === 200) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(e.request)
+      .then((res) => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
