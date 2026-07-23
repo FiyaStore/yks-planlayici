@@ -6,17 +6,39 @@
 <title>YKS Planlayıcım 🎯</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-:root {
+:root, [data-theme="kozmik"] {
   --bg:#09090f; --card:rgba(255,255,255,.04); --card-h:rgba(255,255,255,.07);
   --border:rgba(255,255,255,.09); --purple:#7c3aed; --pl:#a855f7;
   --cyan:#06b6d4; --amber:#f59e0b; --green:#10b981; --red:#ef4444;
   --pink:#ec4899; --text:#e2e8f0; --muted:#64748b;
+  --bg-grad1:rgba(124,58,237,.12); --bg-grad2:rgba(6,182,212,.08);
+}
+[data-theme="tipci"] {
+  --bg:#061410; --card:rgba(16,185,129,.05); --card-h:rgba(16,185,129,.09);
+  --border:rgba(16,185,129,.14); --purple:#059669; --pl:#10b981;
+  --cyan:#2dd4bf; --amber:#f59e0b; --green:#22c55e; --red:#ef4444;
+  --pink:#34d399; --text:#e2f5ec; --muted:#6b9585;
+  --bg-grad1:rgba(5,150,105,.14); --bg-grad2:rgba(45,212,191,.08);
+}
+[data-theme="cyberpunk"] {
+  --bg:#0a0014; --card:rgba(217,70,239,.06); --card-h:rgba(217,70,239,.1);
+  --border:rgba(34,211,238,.18); --purple:#d946ef; --pl:#f0abfc;
+  --cyan:#22d3ee; --amber:#facc15; --green:#4ade80; --red:#f43f5e;
+  --pink:#ec4899; --text:#e8f9ff; --muted:#8888b8;
+  --bg-grad1:rgba(217,70,239,.14); --bg-grad2:rgba(34,211,238,.1);
+}
+[data-theme="sampiyon"] {
+  --bg:#130d02; --card:rgba(245,158,11,.07); --card-h:rgba(245,158,11,.11);
+  --border:rgba(245,158,11,.22); --purple:#d97706; --pl:#fbbf24;
+  --cyan:#38bdf8; --amber:#fde047; --green:#84cc16; --red:#ef4444;
+  --pink:#fb923c; --text:#fef3c7; --muted:#93805c;
+  --bg-grad1:rgba(217,119,6,.16); --bg-grad2:rgba(56,189,248,.08);
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Nunito',sans-serif;background:var(--bg);
-  background-image:radial-gradient(ellipse 60% 40% at 15% 60%,rgba(124,58,237,.12) 0%,transparent 60%),
-    radial-gradient(ellipse 50% 35% at 85% 20%,rgba(6,182,212,.08) 0%,transparent 55%);
-  min-height:100vh;color:var(--text);overflow-x:hidden;}
+  background-image:radial-gradient(ellipse 60% 40% at 15% 60%,var(--bg-grad1) 0%,transparent 60%),
+    radial-gradient(ellipse 50% 35% at 85% 20%,var(--bg-grad2) 0%,transparent 55%);
+  min-height:100vh;color:var(--text);overflow-x:hidden;transition:background-color .4s ease;}
 
 /* HEADER */
 .hdr{background:rgba(9,9,15,.9);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);
@@ -298,6 +320,17 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 .xp-title-badge{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(6,182,212,.1));
   border:1px solid rgba(124,58,237,.3);border-radius:12px;padding:6px 12px;font-size:.82rem;
   font-weight:800;color:#c084fc;margin-bottom:10px;}
+
+/* THEMES */
+.theme-row-card{display:flex;align-items:center;gap:10px;background:var(--card);
+  border:1px solid var(--border);border-radius:14px;padding:10px 12px;margin-bottom:8px;}
+.theme-row-card.active{border-color:var(--purple);background:rgba(124,58,237,.1);}
+.theme-swatch{display:flex;flex-shrink:0;padding-left:8px;}
+.theme-swatch span{display:inline-block;width:16px;height:16px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.25);margin-left:-8px;}
+.theme-info{flex:1;min-width:0;}
+.theme-name{font-weight:800;font-size:.85rem;}
+.theme-meta{font-size:.7rem;color:var(--muted);font-weight:700;margin-top:2px;}
 
 /* REWARDS SHOP */
 .reward-card{background:var(--card);border:1px solid var(--border);border-radius:14px;
@@ -787,6 +820,13 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
       </div>
     </div>
     <div class="card">
+      <div class="card-title">🎨 Temalar</div>
+      <div style="font-size:.78rem;color:var(--muted);font-weight:700;margin-bottom:10px;">
+        XP kazandıkça yeni renk temalarının kilidi açılır!
+      </div>
+      <div id="themesList"></div>
+    </div>
+    <div class="card">
       <div class="card-title">🎁 Ödül Mağazası</div>
       <div style="font-size:.78rem;color:var(--muted);font-weight:700;margin-bottom:10px;">
         Kendine küçük ödüller tanımla — belirlediğin XP'ye ulaşınca kilidi açılır! 🔓
@@ -858,6 +898,12 @@ const QUOTES = [
   "Motivasyon başlatır, alışkanlık devam ettirir. 🔥",
 ];
 const DAYS = ["Paz","Pzt","Sal","Çar","Per","Cum","Cmt"];
+const THEMES = {
+  kozmik:    {name:"Kozmik Gece",      icon:"🌌", threshold:0,    colors:["#7c3aed","#06b6d4","#09090f"]},
+  tipci:     {name:"Tıpçı Yeşili",     icon:"🩺", threshold:300,  colors:["#059669","#2dd4bf","#061410"]},
+  cyberpunk: {name:"Cyberpunk",        icon:"💻", threshold:500,  colors:["#d946ef","#22d3ee","#0a0014"]},
+  sampiyon:  {name:"Şampiyonlar Altın",icon:"🏆", threshold:1000, colors:["#d97706","#fbbf24","#130d02"]},
+};
 const CHEST_TIPS = [
   "Pomodoro arasında telefonuna bakma, beynin toparlanamaz. 📵",
   "Yanlış yaptığın soruyu çöz ama asıl önemlisi NEDEN yanlış yaptığını anlamak.",
@@ -937,6 +983,7 @@ function defaultState(){
     hatalar:[],todayHataAdded:0,todayHataLearned:0,
     rewards:[],
     dailyChestDate:"",
+    activeTheme:"kozmik",
   };
 }
 function save(){localStorage.setItem("yks2025v2",JSON.stringify(S));}
@@ -975,6 +1022,7 @@ function normalizeState(){
   if(S.todayHataLearned===undefined)S.todayHataLearned=0;
   if(!S.rewards)S.rewards=[];
   if(S.dailyChestDate===undefined)S.dailyChestDate="";
+  if(!S.activeTheme||!THEMES[S.activeTheme])S.activeTheme="kozmik";
   if(!S.subjects)S.subjects={};
   for(const[n,d] of Object.entries(SUBJECTS_DATA)){
     if(!S.subjects[n])S.subjects[n]={topics:{}};
@@ -1037,6 +1085,7 @@ function esc(str){
 // ============ INIT ============
 window.addEventListener('DOMContentLoaded',()=>{
   load();
+  applyTheme();
   buildSelects();
   buildHfSubjectFilter();
   setQuote();
@@ -1447,6 +1496,47 @@ function renderQuestList(){
       ${done?'<div class="q-done-badge">✓ Tamam!</div>':''}`;
     list.appendChild(div);
   });
+}
+
+// ============ THEMES ============
+function applyTheme(){
+  document.documentElement.setAttribute("data-theme",S.activeTheme||"kozmik");
+}
+function renderThemes(){
+  const el=document.getElementById("themesList");
+  if(!el)return;
+  el.innerHTML=Object.entries(THEMES).map(([key,t])=>{
+    const unlocked=S.xp>=t.threshold;
+    const active=S.activeTheme===key;
+    const swatch=t.colors.map(c=>`<span style="background:${c}"></span>`).join("");
+    if(!unlocked){
+      const pct=Math.max(0,Math.min(100,Math.round(S.xp/t.threshold*100)));
+      return `<div class="theme-row-card">
+        <div class="theme-swatch">${swatch}</div>
+        <div class="theme-info">
+          <div class="theme-name">${t.icon} ${esc(t.name)}</div>
+          <div class="theme-meta">🔒 ${S.xp} / ${t.threshold} XP</div>
+          <div class="prog-bar" style="margin:4px 0 0;"><div class="prog-fill" style="width:${pct}%"></div></div>
+        </div>
+      </div>`;
+    }
+    return `<div class="theme-row-card${active?' active':''}">
+      <div class="theme-swatch">${swatch}</div>
+      <div class="theme-info">
+        <div class="theme-name">${t.icon} ${esc(t.name)}</div>
+        <div class="theme-meta">${active?'✓ Aktif':'🔓 Kilidi açık'}</div>
+      </div>
+      ${active?'':`<button class="btn btn-p btn-sm" onclick="selectAppTheme('${key}')">Seç</button>`}
+    </div>`;
+  }).join("");
+}
+function selectAppTheme(key){
+  const t=THEMES[key];
+  if(!t||S.xp<t.threshold)return;
+  S.activeTheme=key;
+  applyTheme();
+  save();renderThemes();
+  showToast(t.icon+" "+t.name+" teması aktif! 🎉");
 }
 
 // ============ GOAL / COUNTDOWN ============
@@ -1998,6 +2088,7 @@ function flashAnswer(knewIt){
 // ============ STATS ============
 function renderStats(){
   renderRewards();
+  renderThemes();
   document.getElementById("st-streak").textContent=S.streak;
   document.getElementById("st-mins").textContent=S.todayMins;
   const tot=Object.values(S.subjects).reduce((a,s)=>a+Object.values(s.topics).filter(Boolean).length,0);
@@ -2082,6 +2173,7 @@ function gainXP(amt){
   }
   renderHeader();
   checkRewards();
+  renderThemes();
 }
 function checkRewards(){
   if(!S.rewards||!S.rewards.length)return;
