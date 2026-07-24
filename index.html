@@ -323,6 +323,7 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
 .dn-subj-row:last-child{border-bottom:none;}
 .dn-subj-label{flex:1;font-size:.78rem;font-weight:700;min-width:0;}
 .dn-subj-max{font-size:.65rem;color:var(--muted);font-weight:700;}
+.dn-col-hdr{width:44px;text-align:center;flex-shrink:0;}
 .dn-num{width:44px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;
   color:var(--text);font-family:'Nunito',sans-serif;font-weight:700;padding:5px 2px;
   text-align:center;font-size:.78rem;flex-shrink:0;}
@@ -2302,7 +2303,7 @@ function renderDenemeSubjInputs(){
   const wrap=document.getElementById("dnSubjInputs");
   wrap.innerHTML=`<div class="dn-subj-row">
       <div class="dn-subj-label" style="color:var(--muted);font-size:.68rem;">DERS</div>
-      <div class="dn-subj-max">D</div><div class="dn-subj-max">Y</div><div class="dn-subj-max">B</div>
+      <div class="dn-subj-max dn-col-hdr">D</div><div class="dn-subj-max dn-col-hdr">Y</div><div class="dn-subj-max dn-col-hdr" style="width:26px;">B</div>
     </div>`+
     subs.map(([name,max])=>`<div class="dn-subj-row" data-subject="${esc(name)}" data-max="${max}">
       <div class="dn-subj-label">${esc(name)} <span class="dn-subj-max">/${max}</span></div>
