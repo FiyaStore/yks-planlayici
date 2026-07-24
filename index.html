@@ -1336,6 +1336,7 @@ function esc(str){
 let currentUserId="";
 let cloudSyncTimer=null;
 let syncStatus="idle";
+let appStarted=false;
 function scheduleCloudSync(){
   if(!supabaseClient||!currentUserId)return;
   clearTimeout(cloudSyncTimer);
@@ -1388,9 +1389,15 @@ async function reconcileCloudState(){
   }
 
   if(cloudRow){
-    localStorage.setItem("yks2025v2",JSON.stringify(cloudRow.state));
+    S=Object.assign(defaultState(),cloudRow.state);
+    normalizeState();
+    localStorage.setItem("yks2025v2",JSON.stringify(S));
     localStorage.setItem("yks2025v2:ownerUid",currentUserId);
     setSyncStatus("synced");
+    // İlk girişte startApp()->load() zaten S'i okuyup ekranı çizecek;
+    // sekme odağa döndüğünde ise burada elle tazelemezsek ekran/bellek
+    // buluttaki güncel veriden habersiz kalır (bkz. sekmeler arası senkron hatası).
+    if(appStarted){renderAll();renderTimer();}
     return;
   }
 
@@ -1590,6 +1597,7 @@ function startApp(){
   startAlarmChecker();
   startDayRolloverChecker();
   requestNotifPerm();
+  appStarted=true;
 }
 window.addEventListener('DOMContentLoaded',()=>{
   checkSessionAndGate();
