@@ -1,9 +1,15 @@
 -- YKS Planlayıcı — Faz 2: Cihazlar arası state senkronizasyonu
 -- Bu dosyayı Supabase Studio → SQL Editor'e yapıştırıp çalıştır.
 
+-- Not: "state" bilerek jsonb değil, json tipinde. jsonb, iç içe nesnelerdeki
+-- alan SIRASINI garanti etmiyor (Postgres bunu belgeler) — bu uygulamada
+-- konu listesi gibi yerler nesne anahtar sırasına güveniyor, jsonb kullanılsa
+-- kayıt-okuma turunda sıra karışabilir. Burada state içine hiç SQL sorgusu
+-- atmıyoruz (jsonb'nin asıl avantajı budur), o yüzden json'un "orijinal
+-- metni olduğu gibi koru" davranışı bizim için doğru seçim.
 create table public.student_state (
   id uuid primary key references public.profiles(id) on delete cascade,
-  state jsonb not null default '{}'::jsonb,
+  state json not null default '{}'::json,
   updated_at timestamptz not null default now()
 );
 
