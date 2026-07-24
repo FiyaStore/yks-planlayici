@@ -1951,10 +1951,15 @@ function closeGenerator(){
   generatorProposal=null;
 }
 function renderGeneratorPreview(proposal){
-  const hrs=(proposal.budgetMinutes/60).toFixed(1).replace(/\.0$/,"");
+  // Özet, ham bütçeyi (proposal.budgetMinutes) değil gerçekten takvime sığan
+  // süreyi göstermeli — boş gün sayısı azsa büyük bir kısmı yerleşemeden
+  // düşebiliyor, o durumda "~20 saat" gibi karşılıksız bir vaat verilmemeli.
+  let placedMinutes=0;
+  Object.values(proposal.dayAssign||{}).forEach(da=>da.blocks.forEach(b=>{placedMinutes+=b.dur;}));
+  const hrs=(placedMinutes/60).toFixed(1).replace(/\.0$/,"");
   document.getElementById("genSummaryLine").textContent=
-    proposal.budgetMinutes>0
-      ? `Bu hafta için tahmini ~${hrs} saatlik bir program önerildi, sadece boş günlere eklendi.`
+    placedMinutes>0
+      ? `Bu hafta için ~${hrs} saatlik bir program önerildi, sadece boş günlere eklendi.`
       : "Önerilecek bir şey bulunamadı.";
   const order=[1,2,3,4,5,6,0];
   const dayLabels={0:"Pazar",1:"Pazartesi",2:"Salı",3:"Çarşamba",4:"Perşembe",5:"Cuma",6:"Cumartesi"};
