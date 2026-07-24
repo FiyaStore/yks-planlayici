@@ -563,6 +563,7 @@ textarea.hf-textarea{resize:vertical;min-height:52px;font-family:'Nunito',sans-s
       <button class="goal-btn" onclick="openGoal()">🎯 Hedef</button>
       <button class="snap-btn" onclick="openSnapCard()">📸 Hikaye</button>
       <button class="alarm-btn" id="alarmBtn" onclick="openAlarm()">⏰ Alarm</button>
+      <span class="chip chip-l" id="syncStatusChip"></span>
       <button class="logout-btn" onclick="handleLogout()">🚪 Çıkış</button>
     </div>
   </div>
@@ -1222,7 +1223,11 @@ function logSubjectMinutes(subject,delta){
   if(!S.subjectStudyLog[key])S.subjectStudyLog[key]={};
   S.subjectStudyLog[key][subject]=Math.max(0,(S.subjectStudyLog[key][subject]||0)+delta);
 }
-function save(){localStorage.setItem("yks2025v2",JSON.stringify(S));}
+function save(){
+  localStorage.setItem("yks2025v2",JSON.stringify(S));
+  localStorage.setItem("yks2025v2:ownerUid",currentUserId);
+  scheduleCloudSync();
+}
 function load(){
   try{
     const raw=localStorage.getItem("yks2025v2");
@@ -1326,6 +1331,96 @@ function esc(str){
   return String(str==null?"":str).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+// ============ CLOUD SYNC ============
+let currentUserId="";
+let cloudSyncTimer=null;
+let syncStatus="idle";
+function scheduleCloudSync(){
+  if(!supabaseClient||!currentUserId)return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer=setTimeout(()=>{pushStateToCloud(S);},2000);
+}
+async function pushStateToCloud(stateObj){
+  if(!supabaseClient||!currentUserId)return;
+  setSyncStatus("syncing");
+  try{
+    const{error}=await supabaseClient.from("student_state").upsert({id:currentUserId,state:stateObj});
+    setSyncStatus(error?"offline":"synced");
+  }catch(e){
+    setSyncStatus("offline");
+  }
+}
+function flushPendingCloudSync(){
+  if(!supabaseClient||!currentUserId)return;
+  clearTimeout(cloudSyncTimer);
+  pushStateToCloud(S);
+}
+function readRawLocalStateOrDefault(){
+  try{
+    const raw=localStorage.getItem("yks2025v2");
+    if(!raw){
+      const old=localStorage.getItem("yks2025");
+      if(old){const o=JSON.parse(old);return Object.assign(defaultState(),o);}
+      return defaultState();
+    }
+    return JSON.parse(raw);
+  }catch{return defaultState();}
+}
+async function reconcileCloudState(){
+  if(!supabaseClient)return;
+  const{data:{session}}=await supabaseClient.auth.getSession();
+  if(!session)return;
+  currentUserId=session.user.id;
+
+  let cloudRow=null,fetchFailed=false;
+  try{
+    const{data,error}=await supabaseClient.from("student_state")
+      .select("state").eq("id",currentUserId).maybeSingle();
+    if(error)fetchFailed=true;else cloudRow=data;
+  }catch(e){fetchFailed=true;}
+
+  if(fetchFailed){
+    // Sorgu başarısız (ağ/RLS/timeout) — bunu "bulutta satır yok" ile karıştırma.
+    // Yerel veriye hiç dokunma, load() eldeki veriyle devam etsin.
+    setSyncStatus("offline");
+    return;
+  }
+
+  if(cloudRow){
+    localStorage.setItem("yks2025v2",JSON.stringify(cloudRow.state));
+    localStorage.setItem("yks2025v2:ownerUid",currentUserId);
+    setSyncStatus("synced");
+    return;
+  }
+
+  // Bulutta bu kullanıcı için kesin olarak satır yok.
+  const taggedOwner=localStorage.getItem("yks2025v2:ownerUid");
+  if(taggedOwner&&taggedOwner!==currentUserId){
+    // Paylaşılan cihaz koruması: yereldeki veri başka bir hesaba ait,
+    // onu yeni hesabın "tohumu" gibi buluta yüklemeyelim.
+    localStorage.removeItem("yks2025v2");
+  }
+  localStorage.setItem("yks2025v2:ownerUid",currentUserId);
+  const seed=readRawLocalStateOrDefault();
+  await pushStateToCloud(seed);
+}
+function setSyncStatus(status){
+  syncStatus=status;
+  const el=document.getElementById("syncStatusChip");
+  if(!el)return;
+  const map={
+    idle:"",
+    syncing:"⏳ Senkronize ediliyor",
+    synced:"☁️ Senkron",
+    offline:"⚠️ Çevrimdışı",
+  };
+  el.textContent=map[status]||"";
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden")flushPendingCloudSync();
+  else reconcileCloudState();
+});
+
 // ============ PWA ============
 if("serviceWorker"in navigator){
   window.addEventListener("load",()=>{
@@ -1403,6 +1498,7 @@ async function handleRedeemInvite(code,nickname){
 let currentNickname="";
 async function onAuthSuccess(){
   clearAuthError();
+  await reconcileCloudState();
   const{data:{user}}=await supabaseClient.auth.getUser();
   if(user){
     const{data:profile}=await supabaseClient.from("profiles").select("full_name").eq("id",user.id).maybeSingle();
@@ -1443,6 +1539,8 @@ async function saveNickname(){
 }
 async function handleLogout(){
   if(supabaseClient)await supabaseClient.auth.signOut();
+  localStorage.removeItem("yks2025v2");
+  localStorage.removeItem("yks2025v2:ownerUid");
   // location.pathname (URL'den ?invite=... gibi query string'i atar) ile
   // yeniden yükle, yoksa çıkış sonrası hâlâ "Kayıt Ol" sekmesi açık kalır.
   location.href=location.pathname;
